@@ -243,7 +243,6 @@ class AppNavbar extends HTMLElement {
             { href: 'schedule.html', icon: 'fa-calendar-alt', label: 'ตารางเวร' },
             { href: 'nurse_list.html', icon: 'fa-user-nurse', label: 'บุคลากร' },
             { href: 'approve_swap.html', icon: 'fa-clipboard-check', label: 'อนุมัติ' },
-            { href: 'profile-edit.html', icon: 'fa-user', label: 'โปรไฟล์' }
         ];
 
         const nurseMenus = [
@@ -251,7 +250,6 @@ class AppNavbar extends HTMLElement {
             { href: 'swap_request.html', icon: 'fa-exchange-alt', label: 'แลกเวร' },
             { href: 'trade_market.html', icon: 'fa-shopping-cart', label: 'ซื้อขาย' },
             { href: 'schedule.html', icon: 'fa-calendar-alt', label: 'ตารางเวร' },
-            { href: 'profile-edit.html', icon: 'fa-user', label: 'โปรไฟล์' }
         ];
 
         const menus = isHead ? headMenus : nurseMenus;

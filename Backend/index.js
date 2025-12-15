@@ -276,88 +276,111 @@ app.post("/api/reset-password", async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, message: "Server Error" }); }
 });
 
-// [แก้จุดที่ 2] API Import Users (อ่านจาก Buffer แทนไฟล์)
+// ==========================================
+// [เวอร์ชันล่าสุด] API Import Users (ตัด Department ออก)
+// ==========================================
 app.post('/api/admin/import-users', authenticateToken, uploadExcel.single('file'), async (req, res) => {
     try {
+        // 1. เช็คสิทธิ์ Admin
         if (req.user.roleId !== 1) { 
-            return res.status(403).json({ success: false, message: 'Access Denied: Admins only' });
+            return res.status(403).json({ success: false, message: 'Access Denied' });
         }
 
         if (!req.file) {
-            return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์ Excel (.xlsx)' });
+            return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์ Excel' });
         }
 
-        // อ่านจาก RAM (Buffer) เพราะ Vercel ห้ามเขียนไฟล์
+        // 2. อ่านไฟล์จาก RAM
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = xlsx.utils.sheet_to_json(sheet);
 
-        if (data.length === 0) {
-            return res.status(400).json({ success: false, message: 'ไฟล์ไม่มีข้อมูล' });
-        }
+        console.log(`\n========== เริ่ม Import (${data.length} แถว) ==========`);
 
         let successCount = 0;
         let failCount = 0;
         let importedList = [];
         let errorDetails = [];
 
+        // 3. วนลูปทีละแถว
         for (const [index, row] of data.entries()) {
-            const email = row['Email'] ? String(row['Email']).trim() : null;
-            const firstName = row['FirstName'] ? String(row['FirstName']).trim() : null;
-            const lastName = row['LastName'] ? String(row['LastName']).trim() : '';
-            const roleId = row['RoleID'] || 2; 
-            const deptId = row['DepartmentID'] || null;
+            
+            // --- แปลงหัวตารางเป็นตัวเล็กทั้งหมด (กันเหนียว) ---
+            const normalizedRow = {};
+            Object.keys(row).forEach(key => {
+                const cleanKey = key.trim().toLowerCase().replace(/[\s\-_]/g, '');
+                normalizedRow[cleanKey] = row[key];
+            });
 
+            // LOG ดูข้อมูล (จะเห็นในจอดำ)
+            console.log(`Row ${index + 1}:`, JSON.stringify(normalizedRow));
+
+            // ดึงค่า (ตัด Department ออกแล้ว)
+            const email = normalizedRow['email'] ? String(normalizedRow['email']).trim() : null;
+            const firstName = normalizedRow['firstname'] || normalizedRow['name'];
+            const lastName = normalizedRow['lastname'] || '';
+            const roleId = normalizedRow['roleid'] || normalizedRow['role'] || 2; 
+
+            // 4. เช็คว่าข้อมูลครบไหม
             if (!email || !firstName) {
+                console.log(`❌ Row ${index + 1}: ข้อมูลไม่ครบ (Email หรือ ชื่อ หายไป)`);
                 failCount++;
-                errorDetails.push(`Row ${index + 2}: ข้อมูลไม่ครบ`);
+                errorDetails.push(`แถว ${index + 2}: ข้อมูลไม่ครบ`);
                 continue;
             }
 
             try {
+                // สร้างรหัสผ่าน
                 const rawPassword = generateRandomPassword(8);
                 const hashedPassword = await bcrypt.hash(rawPassword, 10);
-                const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, DepartmentID, Status, CreatedAt) VALUES (?, ?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
-                
-                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId, deptId]);
 
+                // ✅ บันทึกลง DB (ลบ DepartmentID ออกจากคำสั่ง SQL)
+                const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) 
+                             VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+                
+                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId]);
+
+                // ส่งเมล (Fire & Forget)
                 const mailOptions = {
                     from: `"AUTONURSESHIFT" <${process.env.EMAIL_USER}>`,
                     to: email,
-                    subject: 'ข้อมูลเข้าสู่ระบบใหม่ - AUTONURSESHIFT',
-                    html: `<div style="padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>ยินดีต้อนรับ ${firstName}</h2><p>Email: ${email}</p><p>Password: ${rawPassword}</p></div>`
+                    subject: 'ยินดีต้อนรับ - แจ้งรหัสผ่านเข้าใช้งาน',
+                    html: `<div>
+                            <h2>ยินดีต้อนรับ ${firstName}</h2>
+                            <p>บัญชีของคุณถูกสร้างเรียบร้อยแล้ว</p>
+                            <p><b>Email:</b> ${email}</p>
+                            <p><b>Password:</b> <span style="background:#eee; padding:5px;">${rawPassword}</span></p>
+                           </div>`
                 };
+                transporter.sendMail(mailOptions).catch(e => console.error(`Mail Fail for ${email}: ${e.message}`));
 
-                try {
-                    await transporter.sendMail(mailOptions);
-                } catch (mailErr) {
-                    errorDetails.push(`${email}: สร้าง User สำเร็จ แต่ส่งเมลไม่ผ่าน`);
-                }
-
+                console.log(`✅ Row ${index + 1}: เพิ่มสำเร็จ (${email})`);
                 successCount++;
-                importedList.push({ email: email, name: `${firstName} ${lastName}` });
+                importedList.push({ email, name: firstName });
 
             } catch (err) {
                 failCount++;
+                console.error(`💥 Row ${index + 1} Error:`, err.message);
                 if (err.code === 'ER_DUP_ENTRY') {
-                    errorDetails.push(`${email}: มีในระบบแล้ว`);
+                    errorDetails.push(`${email}: อีเมลซ้ำ`);
                 } else {
                     errorDetails.push(`${email}: Database Error`);
                 }
             }
         }
 
+        console.log(`========== จบงาน (ผ่าน ${successCount} / ไม่ผ่าน ${failCount}) ==========\n`);
+
         res.json({
             success: true,
-            message: `ประมวลผลเสร็จสิ้น`,
+            message: `ประมวลผลเสร็จสิ้น (สำเร็จ ${successCount} คน)`,
             summary: { total: data.length, success: successCount, failed: failCount },
-            newUsers: importedList, 
             errors: errorDetails
         });
 
     } catch (err) {
-        console.error("Import Error:", err);
-        res.status(500).json({ success: false, message: 'Server Error: ' + err.message });
+        console.error("Global Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 });
 
@@ -790,6 +813,68 @@ app.post('/api/admin/market/action', authenticateToken, async (req, res) => {
     } catch (err) { await connection.rollback(); console.error("Market Admin Error:", err); res.status(500).json({ success: false, message: err.message }); } finally { connection.release(); }
 });
 
+app.post('/api/admin/add-user', authenticateToken, async (req, res) => {
+    try {
+        // 1. เช็คสิทธิ์ว่าเป็น Admin (RoleID = 1) เท่านั้น
+        if (req.user.roleId !== 1) {
+            return res.status(403).json({ success: false, message: 'Access Denied: Admins only' });
+        }
+
+        const { email, firstName, lastName, roleId } = req.body;
+
+        // 2. ตรวจสอบข้อมูลเบื้องต้น
+        if (!email || !firstName) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอก Email และชื่อจริง' });
+        }
+
+        // 3. สร้างรหัสผ่านสุ่ม + เข้ารหัส
+        const rawPassword = generateRandomPassword(8);
+        const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+        // 🔥 LOG รหัสผ่านดูใน Terminal (เผื่อเมลไม่เข้า จะได้เอารหัสตรงนี้ไปเทส)
+        console.log(`---------------------------------------------`);
+        console.log(`➕ สร้าง User ใหม่: ${email}`);
+        console.log(`🔑 รหัสผ่านคือ: ${rawPassword}`);
+        console.log(`---------------------------------------------`);
+
+        // 4. บันทึกลง Database
+        const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) 
+                     VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+        
+        await dbPool.query(sql, [email, hashedPassword, firstName, lastName || '', roleId || 2]);
+
+        // 5. ส่งอีเมลแจ้งเจ้าตัว
+        const mailOptions = {
+            from: `"AUTONURSESHIFT" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'ยินดีต้อนรับเข้าสู่ระบบ - แจ้งรหัสผ่าน',
+            html: `
+                <div style="padding: 20px; border: 1px solid #ddd; border-radius: 10px; font-family: sans-serif;">
+                    <h2 style="color: #2c3e50;">ยินดีต้อนรับคุณ ${firstName}</h2>
+                    <p>ผู้ดูแลระบบได้สร้างบัญชีผู้ใช้งานให้คุณแล้ว รายละเอียดดังนี้:</p>
+                    <hr>
+                    <p><b>Email:</b> ${email}</p>
+                    <p><b>Password:</b> <span style="background-color: #f1f1f1; padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 16px;">${rawPassword}</span></p>
+                    <hr>
+                    <p style="color: #7f8c8d; font-size: 12px;">กรุณาเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบครั้งแรก</p>
+                </div>
+            `
+        };
+
+        // สั่งส่งเมล (ไม่ต้องรอให้เสร็จ เพื่อความเร็ว)
+        transporter.sendMail(mailOptions).catch(err => console.error("Email Error:", err));
+
+        res.json({ success: true, message: 'เพิ่มผู้ใช้งานเรียบร้อยแล้ว' });
+
+    } catch (err) {
+        console.error("Add User Error:", err);
+        // เช็คว่าอีเมลซ้ำไหม
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, message: 'อีเมลนี้มีอยู่ในระบบแล้ว' });
+        }
+        res.status(500).json({ success: false, message: 'Server Error: ' + err.message });
+    }
+});
 // ==========================================
 // 8. SERVER EXPORT (สำคัญสำหรับ Vercel)
 // ถ้า Run บนเครื่องตัวเอง (Local) ให้ start port
