@@ -5,8 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "tailwind": "tailwindcss -i ./src/input.css -o ../frontend/style.css --watch",
-    "build": "tailwindcss -i ./src/input.css -o ../frontend/style.css --minify"
+    "tailwind": "tailwindcss -i ./src/input.css -o ./frontend/style.css --watch",
+    "build": "tailwindcss -i ./src/input.css -o ./frontend/style.css --minify"
   },
   "author": "",
   "license": "ISC",

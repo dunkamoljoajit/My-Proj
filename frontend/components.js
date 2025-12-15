@@ -1,7 +1,7 @@
 // =========================================================
 // 1. CONFIG & UTILITIES
 // =========================================================
-const API_BASE = 'http://localhost:3000'; // ปรับเป็น URL ของ Backend จริง
+const API_BASE = 'http://localhost:3000'; 
 
 // ฟังก์ชันช่วยดึงข้อมูลผู้ใช้และ Token
 const getUser = () => {
@@ -96,47 +96,57 @@ class AppLayout extends HTMLElement {
 }
 customElements.define('app-layout', AppLayout);
 
+
+// --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
 // --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
 class AppHeader extends HTMLElement {
+
     connectedCallback() {
         const user = getUser();
-        if (!user) return; // ถ้าไม่มี User ไม่ต้องแสดง
+        if (!user) return;
 
-        const isHead = user.RoleID === 1; // เช็คว่าเป็นหัวหน้าหรือไม่
+        const isHead = user.RoleID === 1;
 
-        // **Theme Config:** กำหนดสีและข้อความตาม Role
-        // Head Nurse: สีม่วง (Violet) | Nurse: สีน้ำเงิน (Indigo/Blue)
-        const theme = isHead 
-            ? { 
-                bgIcon: 'bg-violet-600', 
-                shadow: 'shadow-violet-200', 
-                title: 'HEAD NURSE', 
-                sub: 'ADMINISTRATION', // หรือ 'CONTROL CENTER' ตามรูป
+        // **Theme Config:** (ยังคงเดิม)
+        const theme = isHead
+            ? {
+                // Config สำหรับ Head Nurse (Role 1)
+                bgIcon: 'bg-violet-600',
+                shadow: 'shadow-violet-200',
+                title: 'HEAD NURSE',
+                sub: 'ADMINISTRATION',
                 homeLink: 'Headnurse_dashboard.html',
                 statusColor: 'text-emerald-500',
-                headerBorder: 'border-t-4 border-violet-600' // เส้นขอบบนสีม่วง
-              }
-            : { 
-                bgIcon: 'bg-indigo-600', 
-                shadow: 'shadow-indigo-200', 
-                title: `สวัสดี ${user.FirstName}`, // Nurse โชว์ชื่อทักทาย
-                sub: moment().format('D MMMM YYYY'), // Nurse โชว์วันที่ด้านล่างชื่อ
+                headerBorder: 'border-t-4 border-violet-600',
+                userIcon: 'fa-user-md',
+                subDate: ''
+            }
+            : {
+                // Config สำหรับ Nurse (Role 2)
+                bgIcon: 'bg-indigo-600',
+                shadow: 'shadow-indigo-200',
+                title: `สวัสดี ${user.FirstName}`,
+                sub: moment().locale('th').format('D MMMM YYYY'),
                 homeLink: 'dashboard.html',
-                statusColor: 'text-emerald-500', // สถานะ Online สีเขียวเหมือนกัน
-                headerBorder: 'border-t-4 border-indigo-600' // เส้นขอบบนสีน้ำเงิน
-              };
+                statusColor: 'text-emerald-500',
+                headerBorder: 'border-t-4 border-indigo-600',
+                userIcon: 'fa-user-nurse',
+                subDate: ''
+            };
 
-        // วันที่สำหรับ Head Nurse (แสดงด้านขวา)
-        const dateDisplay = isHead ? `<p class="text-xs text-slate-400 mt-1" id="header-date">...</p>` : '';
+        // วันที่สำหรับ Head Nurse (เฉพาะเนื้อหา p tag)
+        const dateDisplayHtml = isHead 
+            ? `<p class="text-xs text-slate-400 mt-1" id="header-date">...</p>` 
+            : '';
 
+        // Render HTML
         this.innerHTML = `
         <header class="bg-white sticky top-0 z-50 shadow-sm ${theme.headerBorder} transition-all duration-300">
             <div class="max-w-screen-md mx-auto px-4 py-3 flex justify-between items-center">
                 
                 <a href="${theme.homeLink}" class="flex items-center gap-3 group">
                     <div class="w-10 h-10 ${theme.bgIcon} rounded-xl flex items-center justify-center text-white shadow-md ${theme.shadow} transition-transform group-hover:scale-105">
-                        <i class="fas ${isHead ? 'fa-user-md' : 'fa-user-nurse'} text-lg"></i>
-                    </div>
+                        <i class="fas ${theme.userIcon} text-lg"></i> </div>
                     <div>
                         <h1 class="text-lg font-bold text-slate-800 leading-none">${theme.title}</h1>
                         <p class="text-[10px] text-slate-400 font-medium tracking-wide mt-0.5 uppercase">${theme.sub}</p>
@@ -145,20 +155,23 @@ class AppHeader extends HTMLElement {
 
                 <div class="flex items-center gap-4">
                     
-                    <div class="hidden sm:block text-right">
-                        ${dateDisplay}
-                    </div>
-
-                    <div id="profile-menu-trigger" class="relative flex items-center gap-3 cursor-pointer bg-white hover:bg-slate-50 px-1 py-1 rounded-full border border-slate-100 shadow-sm transition-all select-none pr-4">
-                        <img id="header-avatar" class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" src="${getProfileImageUrl(user.ProfileImage)}" onerror="this.src='https://placehold.co/100?text=User'">
+                    <div id="right-elements-wrapper" class="flex items-center gap-4">
                         
-                        <div class="text-right hidden sm:block">
-                            <p class="text-xs font-bold text-slate-700 leading-none">${user.FirstName} ${user.LastName}</p>
-                            <p class="text-[9px] ${theme.statusColor} font-bold mt-0.5">● Online</p>
+                        <div class="hidden sm:block text-right">
+                            ${dateDisplayHtml}
                         </div>
-                    </div>
 
-                </div>
+                        <div id="profile-menu-trigger" class="relative flex items-center gap-3 cursor-pointer bg-white hover:bg-slate-50 px-1 py-1 rounded-full border border-slate-100 shadow-sm transition-all select-none pr-4">
+                            <img id="header-avatar" class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" src="${getProfileImageUrl(user.ProfileImage)}" onerror="this.src='https://placehold.co/100?text=User'">
+                            
+                            <div class="text-right hidden sm:block">
+                                <p class="text-xs font-bold text-slate-700 leading-none">${user.FirstName} ${user.LastName}</p>
+                                <p class="text-[9px] ${theme.statusColor} font-bold mt-0.5">● Online</p>
+                            </div>
+                            </div>
+
+                    </div>
+                    </div>
             </div>
         </header>`;
 
@@ -166,11 +179,10 @@ class AppHeader extends HTMLElement {
     }
 
     setupLogic(user, isHead) {
-        // 1. ตั้งค่าวันที่ (เฉพาะ Head Nurse ที่มี Element นี้)
+        // 1. ตั้งค่าวันที่ (ยังคงเดิม)
         if(isHead) {
             const dateEl = this.querySelector('#header-date');
             if(dateEl) {
-                // ใช้ moment.js เพื่อ format วันที่ภาษาไทยให้สวยงาม (ถ้ามี) หรือใช้ toLocaleDateString
                 if(typeof moment !== 'undefined') {
                     dateEl.innerText = moment().locale('th').format('วันddddที่ D MMMM YYYY');
                 } else {
@@ -182,14 +194,12 @@ class AppHeader extends HTMLElement {
         // 2. สร้าง Dropdown Menu แบบ Dynamic
         const trigger = this.querySelector('#profile-menu-trigger');
         if(trigger) {
-            // เช็คว่ามีเมนูอยู่แล้วหรือยัง
             if (!trigger.querySelector('#custom-dropdown')) {
+                
+                // *** Dropdown HTML: ไม่มี Header และใช้ positioning ที่มั่นคง ***
                 const dropdownHtml = `
-                <div id="custom-dropdown" class="hidden absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[60] animate-fade-in-up origin-top-right">
-                    <div class="px-4 py-3 border-b border-slate-50 mb-1">
-                        <p class="text-sm font-bold text-slate-800">${user.FirstName} ${user.LastName}</p>
-                        <p class="text-xs text-slate-400">${isHead ? 'Head Nurse' : 'Nurse'}</p>
-                    </div>
+                <div id="custom-dropdown" class="hidden absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[60] origin-top-right transition-all duration-200">
+                    
                     <a href="profile-edit.html" class="flex items-center px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors">
                         <i class="fas fa-user-edit w-5 mr-2 text-indigo-500 opacity-80"></i> แก้ไขโปรไฟล์
                     </a>
@@ -203,29 +213,28 @@ class AppHeader extends HTMLElement {
 
             const dropdown = trigger.querySelector('#custom-dropdown');
             
-            // Toggle Menu
+            // Event Listener (ยังคงเดิม)
             trigger.addEventListener('click', (e) => {
                 e.stopPropagation();
                 dropdown.classList.toggle('hidden');
             });
 
-            // Close Menu when clicking outside
             document.addEventListener('click', (e) => {
                 if (!trigger.contains(e.target)) dropdown.classList.add('hidden');
             });
 
-            // Logout Logic
             const logoutBtn = trigger.querySelector('#header-logout-btn');
             if(logoutBtn) {
                 logoutBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    logout(); // เรียกฟังก์ชัน logout กลาง
+                    logout();
                 });
             }
         }
     }
 }
 
+customElements.define('app-header', AppHeader);
 
 // --- App Navbar (เมนูล่าง - เปลี่ยนรายการเมนูตาม Role) ---
 class AppNavbar extends HTMLElement {
