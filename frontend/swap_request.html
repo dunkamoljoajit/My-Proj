@@ -25,11 +25,12 @@
         body { 
             font-family: 'Kanit', sans-serif; 
             background-color: #f0f4f8;
-            background-image: url('background06.png'); 
+            /* background-image: url('background06.png'); */
             background-size: cover; 
             background-position: center;
             background-attachment: fixed;
             -webkit-tap-highlight-color: transparent; 
+            transition: background-image 0.5s ease-in-out;
         }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -258,10 +259,15 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const userStr = localStorage.getItem('user');
-            const token = localStorage.getItem('authToken'); // ✅ ตรวจสอบ Token
+            const token = localStorage.getItem('authToken');
 
             if(!userStr || !token) { window.location.href = 'login.html'; return; }
             currentUser = JSON.parse(userStr);
+            if (currentUser.RoleID === 1) {
+                document.body.style.backgroundImage = "url('background01.png')"; 
+            } else {
+                document.body.style.backgroundImage = "url('background06.png')";
+            }
 
             flatpickr("#searchDate", { locale: "th", dateFormat: "Y-m-d", altInput: true, altFormat: "j F Y", disableMobile: "true" });
 

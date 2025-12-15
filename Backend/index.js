@@ -276,111 +276,87 @@ app.post("/api/reset-password", async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, message: "Server Error" }); }
 });
 
-// ==========================================
-// [เวอร์ชันล่าสุด] API Import Users (ตัด Department ออก)
-// ==========================================
+// [แก้จุดที่ 2] API Import Users (อ่านจาก Buffer แทนไฟล์)
 app.post('/api/admin/import-users', authenticateToken, uploadExcel.single('file'), async (req, res) => {
     try {
-        // 1. เช็คสิทธิ์ Admin
         if (req.user.roleId !== 1) { 
-            return res.status(403).json({ success: false, message: 'Access Denied' });
+            return res.status(403).json({ success: false, message: 'Access Denied: Admins only' });
         }
 
         if (!req.file) {
-            return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์ Excel' });
+            return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์ Excel (.xlsx)' });
         }
 
-        // 2. อ่านไฟล์จาก RAM
+        // อ่านจาก RAM (Buffer) เพราะ Vercel ห้ามเขียนไฟล์
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = xlsx.utils.sheet_to_json(sheet);
 
-        console.log(`\n========== เริ่ม Import (${data.length} แถว) ==========`);
+        if (data.length === 0) {
+            return res.status(400).json({ success: false, message: 'ไฟล์ไม่มีข้อมูล' });
+        }
 
         let successCount = 0;
         let failCount = 0;
         let importedList = [];
         let errorDetails = [];
 
-        // 3. วนลูปทีละแถว
         for (const [index, row] of data.entries()) {
-            
-            // --- แปลงหัวตารางเป็นตัวเล็กทั้งหมด (กันเหนียว) ---
-            const normalizedRow = {};
-            Object.keys(row).forEach(key => {
-                const cleanKey = key.trim().toLowerCase().replace(/[\s\-_]/g, '');
-                normalizedRow[cleanKey] = row[key];
-            });
+            const email = row['Email'] ? String(row['Email']).trim() : null;
+            const firstName = row['FirstName'] ? String(row['FirstName']).trim() : null;
+            const lastName = row['LastName'] ? String(row['LastName']).trim() : '';
+            const roleId = row['RoleID'] || 2; 
 
-            // LOG ดูข้อมูล (จะเห็นในจอดำ)
-            console.log(`Row ${index + 1}:`, JSON.stringify(normalizedRow));
-
-            // ดึงค่า (ตัด Department ออกแล้ว)
-            const email = normalizedRow['email'] ? String(normalizedRow['email']).trim() : null;
-            const firstName = normalizedRow['firstname'] || normalizedRow['name'];
-            const lastName = normalizedRow['lastname'] || '';
-            const roleId = normalizedRow['roleid'] || normalizedRow['role'] || 2; 
-
-            // 4. เช็คว่าข้อมูลครบไหม
             if (!email || !firstName) {
-                console.log(`❌ Row ${index + 1}: ข้อมูลไม่ครบ (Email หรือ ชื่อ หายไป)`);
                 failCount++;
-                errorDetails.push(`แถว ${index + 2}: ข้อมูลไม่ครบ`);
+                errorDetails.push(`Row ${index + 2}: ข้อมูลไม่ครบ`);
                 continue;
             }
 
             try {
-                // สร้างรหัสผ่าน
                 const rawPassword = generateRandomPassword(8);
                 const hashedPassword = await bcrypt.hash(rawPassword, 10);
-
-                // ✅ บันทึกลง DB (ลบ DepartmentID ออกจากคำสั่ง SQL)
-                const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) 
-                             VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+                const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
                 
-                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId]);
+                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId, deptId]);
 
-                // ส่งเมล (Fire & Forget)
                 const mailOptions = {
                     from: `"AUTONURSESHIFT" <${process.env.EMAIL_USER}>`,
                     to: email,
-                    subject: 'ยินดีต้อนรับ - แจ้งรหัสผ่านเข้าใช้งาน',
-                    html: `<div>
-                            <h2>ยินดีต้อนรับ ${firstName}</h2>
-                            <p>บัญชีของคุณถูกสร้างเรียบร้อยแล้ว</p>
-                            <p><b>Email:</b> ${email}</p>
-                            <p><b>Password:</b> <span style="background:#eee; padding:5px;">${rawPassword}</span></p>
-                           </div>`
+                    subject: 'ข้อมูลเข้าสู่ระบบใหม่ - AUTONURSESHIFT',
+                    html: `<div style="padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>ยินดีต้อนรับ ${firstName}</h2><p>Email: ${email}</p><p>Password: ${rawPassword}</p></div>`
                 };
-                transporter.sendMail(mailOptions).catch(e => console.error(`Mail Fail for ${email}: ${e.message}`));
 
-                console.log(`✅ Row ${index + 1}: เพิ่มสำเร็จ (${email})`);
+                try {
+                    await transporter.sendMail(mailOptions);
+                } catch (mailErr) {
+                    errorDetails.push(`${email}: สร้าง User สำเร็จ แต่ส่งเมลไม่ผ่าน`);
+                }
+
                 successCount++;
-                importedList.push({ email, name: firstName });
+                importedList.push({ email: email, name: `${firstName} ${lastName}` });
 
             } catch (err) {
                 failCount++;
-                console.error(`💥 Row ${index + 1} Error:`, err.message);
                 if (err.code === 'ER_DUP_ENTRY') {
-                    errorDetails.push(`${email}: อีเมลซ้ำ`);
+                    errorDetails.push(`${email}: มีในระบบแล้ว`);
                 } else {
                     errorDetails.push(`${email}: Database Error`);
                 }
             }
         }
 
-        console.log(`========== จบงาน (ผ่าน ${successCount} / ไม่ผ่าน ${failCount}) ==========\n`);
-
         res.json({
             success: true,
-            message: `ประมวลผลเสร็จสิ้น (สำเร็จ ${successCount} คน)`,
+            message: `ประมวลผลเสร็จสิ้น`,
             summary: { total: data.length, success: successCount, failed: failCount },
+            newUsers: importedList, 
             errors: errorDetails
         });
 
     } catch (err) {
-        console.error("Global Error:", err);
-        res.status(500).json({ success: false, message: "Server Error" });
+        console.error("Import Error:", err);
+        res.status(500).json({ success: false, message: 'Server Error: ' + err.message });
     }
 });
 
