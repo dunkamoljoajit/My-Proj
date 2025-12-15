@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTONURSESHIFT - ตั้งรหัสผ่านใหม่</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        /* --- Reset & Base --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        html, body { height: 100%; font-family: 'Kanit', sans-serif; }
+
+        body {
+            background-color: #eef2f5;
+            background-image: url('background04.png'); /* ใช้รูปเดียวกับหน้า OTP */
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* --- Logo Styles (Consistent with previous pages) --- */
+        .logo {
+            position: absolute;
+            top: 30px;
+            left: 40px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 10;
+        }
+        .logo-img { width: 60px; height: 60px; object-fit: contain; }
+        .logo-text {
+            font-family: 'Prompt', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e2a78;
+            margin-left: -10px;
+        }
+
+        /* --- Box Styles --- */
+        .reset-box {
+            background: #ffffff;
+            width: 100%;
+            max-width: 500px; /* กว้างพอสำหรับ Input ยาวๆ */
+            padding: 2.5rem 3rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+            position: relative;
+            margin-top: 0;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            font-size: 1.2rem;
+            color: #888;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            padding: 5px;
+        }
+        .back-link:hover { color: #191970; }
+
+        /* --- Typography --- */
+        .content-wrapper { 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        
+        h2 {
+            color: #191970;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+        
+        .sub-text {
+            color: #777;
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        /* --- Form Elements --- */
+        .reset-form { width: 100%; }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 1.2rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #333;
+            margin-left: 10px;
+        }
+
+        .input-wrapper { position: relative; }
+
+        input {
+            width: 100%;
+            padding: 15px 50px 15px 25px; /* เว้นขวาไว้ใส่ลูกตา */
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-family: 'Kanit', sans-serif;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        input:focus {
+            background: #fff;
+            border-color: #191970;
+            box-shadow: 0 0 0 3px rgba(25, 25, 112, 0.1);
+        }
+
+        /* Error State (สำหรับ Password ไม่ตรงกัน) */
+        input.mismatch {
+            border-color: #fa5252;
+            background: #fff5f5;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+            cursor: pointer;
+            transition: color 0.3s;
+            padding: 5px; /* เพิ่มพื้นที่กด */
+        }
+        .toggle-password:hover { color: #191970; }
+
+        /* --- Validation Box --- */
+        .validation-box {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #eee;
+        }
+        
+        .validation-box ul { list-style: none; }
+        
+        .validation-box li {
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            color: #adb5bd; /* สีเริ่มต้น (เทา) */
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        /* Valid State (เขียว) */
+        .validation-box li.valid { color: #28a745; font-weight: 500; }
+        .validation-box li.valid i { content: "\f058"; } /* เปลี่ยนไอคอนเป็น Check circle */
+
+        /* Invalid State (แดง - ใช้ตอนกด Submit แล้วยังไม่ผ่าน) */
+        .validation-box li.invalid { color: #dc3545; }
+
+        /* --- Button --- */
+        .submit-btn {
+            background-color: #191970; 
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            font-family: 'Kanit', sans-serif;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s;
+            width: 100%; 
+            box-shadow: 0 4px 15px rgba(25, 25, 112, 0.2);
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background-color: #2c2c94; 
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* =========================================
+           RESPONSIVE DESIGN
+           ========================================= */
+        
+        /* Tablet */
+        @media (max-width: 820px) {
+            .logo { top: 20px; left: 30px; }
+            .logo-img { width: 50px; height: 50px; }
+            .logo-text { font-size: 1.3rem; }
+            .reset-box { padding: 2rem 2rem; }
+        }
+
+        /* Mobile */
+        @media (max-width: 576px) {
+            body {
+                flex-direction: column;
+                justify-content: center;
+                padding-top: 70px;
+            }
+            
+            /* ย้าย Logo มาตรงกลาง */
+            .logo {
+                position: absolute;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                justify-content: center;
+                margin-left: 0;
+            }
+
+            .reset-box {
+                padding: 2rem 1.5rem;
+                width: 100%;
+            }
+
+            h2 { font-size: 1.6rem; }
+            .sub-text { font-size: 0.9rem; margin-bottom: 1.5rem; }
+            
+            /* ปรับ Input บนมือถือ */
+            input { padding: 14px 45px 14px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="logo">
+        <img src="logo.png" alt="logo" class="logo-img"> 
+        <span class="logo-text">AUTONURSESHIFT</span>
+    </div>
+
+    <div class="reset-box">
+        <a href="#" id="back-btn" class="back-link">
+            <i class="fas fa-chevron-left"></i>
+        </a>
+        
+        <div class="content-wrapper">
+            <h2>ตั้งรหัสผ่านใหม่ 🔒</h2>
+            <p class="sub-text">สร้างรหัสผ่านที่ปลอดภัยเพื่อปกป้องบัญชีของคุณ</p>
+            
+            <form class="reset-form">
+                
+                <div class="input-group">
+                    <label>รหัสผ่านใหม่</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="new-password" placeholder="เช่น Pass@1234" required>
+                        <i class="fas fa-eye toggle-password"></i>
+                    </div>
+                </div>
+
+                <div class="validation-box">
+                    <ul>
+                        <li id="length"><i class="fas fa-circle"></i> 8 ตัวอักษรขึ้นไป</li>
+                        <li id="upper"><i class="fas fa-circle"></i> ตัวพิมพ์ใหญ่ (A-Z)</li>
+                        <li id="lower"><i class="fas fa-circle"></i> ตัวพิมพ์เล็ก (a-z)</li>
+                        <li id="number"><i class="fas fa-circle"></i> ตัวเลข (0-9)</li>
+                        <li id="special"><i class="fas fa-circle"></i> อักขระพิเศษ (!@#$.%)</li>
+                    </ul>
+                </div>
+                
+                <div class="input-group">
+                    <label>ยืนยันรหัสผ่านอีกครั้ง</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="confirm-password" placeholder="กรอกรหัสผ่านเหมือนข้างบน" required>
+                        <i class="fas fa-eye toggle-password"></i>
+                    </div>
+                </div>
+                
+                <button type="submit" class="submit-btn" id="reset-btn" disabled>
+                    บันทึกรหัสผ่านใหม่
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 1. ดึงค่า Params
+        const urlParams = new URLSearchParams(window.location.search);
+        const email = urlParams.get('email');
+        const otp = urlParams.get('otp');
+
+        // Setup Back Button (ให้กลับไปหน้า verify-otp พร้อมแนบ email เดิม)
+        const backBtn = document.getElementById('back-btn');
+        if(email) {
+            backBtn.href = `verify-otp.html?email=${email}`;
+        } else {
+            backBtn.href = 'login.html';
+        }
+
+        if (!email || !otp) {
+            // ถ้าไม่มีข้อมูล ให้แสดง Alert แล้วดีดกลับ
+             alert('ไม่พบข้อมูลยืนยันตัวตน กรุณาทำรายการใหม่');
+             window.location.href = 'otp.html';
+        }
+
+        // 2. Toggle Password Visibility
+        document.querySelectorAll('.toggle-password').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const input = this.previousElementSibling;
+                const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+                input.setAttribute('type', type);
+                
+                this.classList.toggle('fa-eye');
+                this.classList.toggle('fa-eye-slash');
+            });
+        });
+
+        // 3. Real-time Validation
+        const newPassInput = document.getElementById('new-password');
+        const confirmPassInput = document.getElementById('confirm-password');
+        const resetBtn = document.getElementById('reset-btn');
+        
+        const ruleElements = {
+            length: document.getElementById('length'),
+            upper: document.getElementById('upper'),
+            lower: document.getElementById('lower'),
+            number: document.getElementById('number'),
+            special: document.getElementById('special')
+        };
+
+        function updateRuleStatus(element, isValid) {
+            const icon = element.querySelector('i');
+            if (isValid) {
+                element.classList.add('valid');
+                element.classList.remove('invalid');
+                icon.className = 'fas fa-check-circle'; // ไอคอนถูก
+            } else {
+                element.classList.remove('valid');
+                // icon.className = 'fas fa-circle'; // กลับเป็นวงกลมธรรมดา
+            }
+        }
+
+        function validate() {
+            const val = newPassInput.value;
+            const confirmVal = confirmPassInput.value;
+            
+            // เงื่อนไข Regex
+            const checks = {
+                length: val.length >= 8,
+                upper: /[A-Z]/.test(val),
+                lower: /[a-z]/.test(val),
+                number: /[0-9]/.test(val),
+                special: /[!@#$%^&*._-]/.test(val)
+            };
+
+            let allRulesPassed = true;
+            for (const key in checks) {
+                updateRuleStatus(ruleElements[key], checks[key]);
+                if (!checks[key]) allRulesPassed = false;
+            }
+
+            // Check Confirm Match
+            let matchPassed = false;
+            if (confirmVal.length > 0) {
+                if (val !== confirmVal) {
+                    confirmPassInput.classList.add('mismatch');
+                } else {
+                    confirmPassInput.classList.remove('mismatch');
+                    matchPassed = true;
+                }
+            }
+
+            // เปิดปุ่มเมื่อเงื่อนไขครบ และรหัสตรงกัน
+            resetBtn.disabled = !(allRulesPassed && matchPassed);
+        }
+
+        newPassInput.addEventListener('input', validate);
+        confirmPassInput.addEventListener('input', validate);
+
+        // 4. Submit Form
+        document.querySelector('.reset-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const originalText = resetBtn.innerText;
+            resetBtn.innerText = "กำลังอัปเดต...";
+            resetBtn.disabled = true;
+            resetBtn.style.opacity = "0.7";
+
+            try {
+                // ⚠️ URL Backend ของคุณ
+                const res = await fetch('http://localhost:3000/api/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: email, 
+                        otp: otp, 
+                        newPassword: newPassInput.value 
+                    })
+                });
+                
+                const data = await res.json();
+
+                if (res.ok) {
+                    // ✅ สำเร็จ! ไปหน้า Success
+                    window.location.href = 'newcode_cp.html';
+                } else {
+                    alert("❌ " + (data.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ"));
+                    resetBtn.innerText = originalText;
+                    resetBtn.disabled = false;
+                    resetBtn.style.opacity = "1";
+                }
+            } catch (err) {
+                console.error(err);
+                alert("⚠ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+                resetBtn.innerText = originalText;
+                resetBtn.disabled = false;
+                resetBtn.style.opacity = "1";
+            }
+        });
+    </script>
+</body>
+</html>

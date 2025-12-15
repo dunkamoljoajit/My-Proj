@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>แก้ไขโปรไฟล์ - AUTONURSESHIFT</title>
+    
+    <link href="./style.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/th.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <script src="components.js"></script>
+
+    <style>
+        /* ใช้ Style เดียวกับ Dashboard */
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #f8fafc; 
+            background-image: url('background06.png'); 
+            background-size: cover; 
+            background-attachment: fixed; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
+        
+        /* Animation เหมือน Dashboard */
+        .animate-enter { animation: floatUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        @keyframes floatUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        /* Interactive Card Hover */
+        .interactive-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .interactive-card { transition: all 0.3s; }
+    </style>
+</head>
+
+<body class="text-slate-800 antialiased">
+    <div class="flex flex-col h-screen relative overflow-hidden">
+
+        <app-header></app-header>
+
+        <main class="flex-1 overflow-y-auto overflow-x-hidden pb-32 scroll-smooth flex items-center justify-center p-4">
+            
+            <div class="max-w-md w-full">
+                <a id="back-link" href="#" class="inline-flex items-center text-slate-500 hover:text-indigo-600 mb-4 transition text-sm font-medium animate-enter">
+                    <i class="fas fa-arrow-left mr-2"></i> กลับหน้าหลัก
+                </a>
+
+                <div class="animate-enter bg-white rounded-[2rem] shadow-lg shadow-indigo-100/50 border border-slate-100 p-8 relative overflow-hidden text-center interactive-card">
+                    
+                    <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+                    <div class="absolute -left-10 -bottom-10 w-32 h-32 bg-pink-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+
+                    <div class="relative z-10">
+                        <h2 class="text-xl font-bold text-slate-800 mb-6">รูปโปรไฟล์ของคุณ</h2>
+
+                        <div class="relative w-40 h-40 mx-auto mb-6 group">
+                            <div class="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                            
+                            <img id="currentProfileImg" src="https://placehold.co/150" alt="Profile Image" class="relative w-full h-full object-cover rounded-full border-4 border-white shadow-xl">
+                            
+                            <label for="fileInput" class="absolute bottom-1 right-1 w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center cursor-pointer shadow-lg border-4 border-white transition transform active:scale-90 hover:rotate-12">
+                                <i class="fas fa-camera"></i>
+                            </label>
+                            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" class="hidden">
+                        </div>
+
+                        <div class="mb-6">
+                            <h3 id="userNameDisplay" class="text-2xl font-bold text-slate-800">...</h3>
+                            <span id="userRoleDisplay" class="inline-block mt-1 px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full border border-indigo-100">...</span>
+                        </div>
+
+                        <p class="text-xs text-slate-400 font-light">
+                            รองรับไฟล์ .jpg, .png ขนาดไม่เกิน 5MB
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <app-navbar></app-navbar>
+
+    </div>
+
+<script>
+        const API_BASE_URL = 'http://localhost:3000'; 
+        let currentUserData = JSON.parse(localStorage.getItem('user'));
+        const token = localStorage.getItem('authToken');
+
+        if (!currentUserData || !currentUserData.UserID || !token) {
+            window.location.href = 'login.html';
+        }
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 🟡 ส่วนที่แก้ไข: ใช้ if-else เพื่อแยกทางกันเดิน
+            const backLink = document.getElementById('back-link');
+            
+            if (currentUserData.RoleID === 1) {
+                // ถ้าเป็น Head Nurse (Role 1) ให้ไปหน้านี้
+                backLink.href = 'Headnurse_dashboard.html'; 
+            } else {
+                // ถ้าเป็นพยาบาลทั่วไป (Role อื่นๆ) ให้ไปหน้านี้
+                backLink.href = 'dashboard.html'; 
+            }
+
+            await fetchLatestUserData();
+            
+            document.getElementById('userNameDisplay').textContent = `${currentUserData.FirstName} ${currentUserData.LastName}`;
+            document.getElementById('userRoleDisplay').textContent = (currentUserData.RoleID == 1) ? 'Head Nurse' : 'Nurse';
+            
+            loadImage();
+
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', uploadImage);
+            }
+        });
+
+        async function fetchLatestUserData() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/dashboard-summary`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ userId: currentUserData.UserID })
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.success && data.userData) {
+                    currentUserData.ProfileImage = data.userData.profileImage;
+                    currentUserData.FirstName = data.userData.fullName.split(' ')[0]; 
+                    localStorage.setItem('user', JSON.stringify(currentUserData));
+                }
+            } catch (err) {
+                console.error("Sync Error:", err);
+            }
+        }
+
+        function loadImage() {
+            const imgElement = document.getElementById('currentProfileImg');
+            
+            // ใช้ฟังก์ชันตัวช่วยเพื่อเลือก URL ที่ถูกต้อง
+            let imgSrc = getProfileImageUrl(currentUserData.ProfileImage);
+
+            // ถ้าไม่ใช่รูป Cloudinary (เป็นรูป Local) ให้เติม Timestamp เพื่อแก้ Cache
+            if (!imgSrc.startsWith('http') || imgSrc.includes('localhost')) {
+                 imgSrc += `?t=${new Date().getTime()}`;
+            }
+            
+            imgElement.src = imgSrc;
+        }
+
+        async function uploadImage() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('userId', currentUserData.UserID);
+            formData.append('profileImage', file);
+
+            Swal.fire({
+                title: 'กำลังอัปโหลด...',
+                text: 'กรุณารอสักครู่',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+                customClass: { popup: 'rounded-2xl' }
+            });
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/update-profile-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: formData
+                });
+
+                if (response.status === 401) {
+                    throw new Error("Session expired. Please login again.");
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 1. อัปเดต Path รูปใหม่
+                    currentUserData.ProfileImage = result.imagePath;
+                    localStorage.setItem('user', JSON.stringify(currentUserData));
+
+                    // 2. รีโหลดรูปบนหน้าจอ
+                    loadImage();
+
+                    // 3. แจ้งเตือนสำเร็จ
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'สำเร็จ!',
+                        text: 'เปลี่ยนรูปโปรไฟล์เรียบร้อยแล้ว',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        customClass: { popup: 'rounded-2xl' }
+                    }).then(() => {
+                        location.reload();
+                    });
+
+                } else {
+                    throw new Error(result.message);
+                }
+
+            } catch (error) {
+                console.error(error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: error.message || 'ไม่สามารถเชื่อมต่อ Server ได้',
+                    confirmButtonColor: '#ef4444',
+                    customClass: { popup: 'rounded-2xl' }
+                }).then(() => {
+                    if (error.message.includes("Session expired")) {
+                        window.location.href = 'login.html';
+                    }
+                });
+            } finally {
+                fileInput.value = ''; 
+            }
+        }
+    </script>
+</body>
+</html>

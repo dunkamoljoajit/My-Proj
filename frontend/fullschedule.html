@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ตารางเวรรวม - AUTONURSESHIFT</title>
+    
+    <link href="./style.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="./lib/flatpickr.css">
+    <script src="./lib/flatpickr.js"></script>
+    <script src="./lib/th.js"></script>
+
+    <link rel="stylesheet" href="./lib/fontawesome/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/th.min.js"></script>
+
+    <script src="components.js"></script> 
+
+    <style>
+        /* --- CORE THEME --- */
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #f0f4f8;
+            background-image: url('background06.png'); 
+            background-size: cover; 
+            background-position: center;
+            background-attachment: fixed;
+            -webkit-tap-highlight-color: transparent; 
+            color: #1e293b;
+            overscroll-behavior: none;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 6rem); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        /* --- GLASSMORPHISM --- */
+        .glass-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        .glass-modal {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-item { opacity: 0; animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        /* --- SHIFT THEMES --- */
+        .shift-header-morning { background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%); color: #1e40af; border-left: 4px solid #3b82f6; }
+        .shift-header-afternoon { background: linear-gradient(135deg, #ffedd5 0%, #fff7ed 100%); color: #9a3412; border-left: 4px solid #f97316; }
+        .shift-header-night { background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%); color: #6b21a8; border-left: 4px solid #a855f7; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <app-header></app-header>
+
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        
+        <div class="glass-header z-20 px-6 py-4 flex flex-col md:flex-row md:items-end justify-between gap-4 shadow-sm">
+            <div class="w-full md:w-auto">
+                <button onclick="openSelectionModal()" class="group flex items-center gap-1.5 text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-2 transition hover:text-indigo-700">
+                    <span class="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition"><i class="fas fa-exchange-alt text-[9px]"></i></span>
+                    เปลี่ยนมุมมอง
+                </button>
+                
+                <div class="w-full max-w-xs">
+                    <app-date-picker id="mainDatePicker" placeholder="เลือกวันที่ต้องการ..."></app-date-picker>
+                </div>
+            </div>
+
+            <div class="flex gap-2 self-end md:self-auto">
+                <button onclick="changeDay(-1)" class="w-10 h-10 rounded-2xl bg-white/60 border border-white/50 shadow-sm flex items-center justify-center text-slate-500 hover:bg-white hover:text-indigo-600 hover:shadow-md transition active:scale-90">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button onclick="changeDay(1)" class="w-10 h-10 rounded-2xl bg-white/60 border border-white/50 shadow-sm flex items-center justify-center text-slate-500 hover:bg-white hover:text-indigo-600 hover:shadow-md transition active:scale-90">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pb-32 p-4 md:p-6 space-y-6">
+            
+            <div class="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                <div class="glass-card flex-1 min-w-[100px] p-3 rounded-2xl flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fas fa-sun"></i></div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">เวรเช้า</div>
+                        <div class="text-xl font-black text-slate-800" id="count-morning">0</div>
+                    </div>
+                </div>
+                <div class="glass-card flex-1 min-w-[100px] p-3 rounded-2xl flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center"><i class="fas fa-cloud-sun"></i></div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">เวรบ่าย</div>
+                        <div class="text-xl font-black text-slate-800" id="count-afternoon">0</div>
+                    </div>
+                </div>
+                <div class="glass-card flex-1 min-w-[100px] p-3 rounded-2xl flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center"><i class="fas fa-moon"></i></div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">เวรดึก</div>
+                        <div class="text-xl font-black text-slate-800" id="count-night">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="scheduleContainer" class="space-y-6 min-h-[200px] relative">
+                <div id="loading-state" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-3xl z-10 min-h-[200px]">
+                    <i class="fas fa-spinner fa-spin text-3xl text-indigo-500 mb-3"></i>
+                    <p class="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
+                </div>
+
+                <div id="section-morning" class="hidden">
+                    <div class="shift-header-morning px-4 py-2 rounded-r-xl rounded-l-md font-bold text-sm inline-flex items-center gap-2 mb-3 shadow-sm">
+                        <i class="fas fa-sun"></i> เวรเช้า (08:00 - 16:00)
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="list-morning"></div>
+                </div>
+
+                <div id="section-afternoon" class="hidden">
+                    <div class="shift-header-afternoon px-4 py-2 rounded-r-xl rounded-l-md font-bold text-sm inline-flex items-center gap-2 mb-3 shadow-sm">
+                        <i class="fas fa-cloud-sun"></i> เวรบ่าย (16:00 - 00:00)
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="list-afternoon"></div>
+                </div>
+
+                <div id="section-night" class="hidden">
+                    <div class="shift-header-night px-4 py-2 rounded-r-xl rounded-l-md font-bold text-sm inline-flex items-center gap-2 mb-3 shadow-sm">
+                        <i class="fas fa-moon"></i> เวรดึก (00:00 - 08:00)
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="list-night"></div>
+                </div>
+
+                <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 text-slate-400">
+                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                        <i class="fas fa-calendar-times text-3xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm">ไม่มีตารางเวรในวันนี้</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <app-navbar></app-navbar>
+
+    <div id="scheduleTypeModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-6 transition-opacity duration-300 hidden opacity-0">
+        <div class="glass-modal w-full max-w-sm rounded-[2.5rem] p-8 text-center transform scale-90 transition-all duration-300 relative overflow-hidden" id="typeModalContent">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+            <div class="w-20 h-20 bg-gradient-to-br from-indigo-100 to-white rounded-[2rem] mx-auto flex items-center justify-center shadow-inner mb-6 border border-white"><i class="fas fa-calendar-alt text-4xl text-indigo-500 drop-shadow-sm"></i></div>
+            <h2 class="text-2xl font-extrabold text-slate-800 mb-2">เลือกมุมมอง</h2>
+            <p class="text-slate-500 text-sm mb-8 px-2">สลับมุมมองระหว่างตารางส่วนตัวและตารางรวม</p>
+            <div class="space-y-3">
+                <button onclick="selectScheduleType('personal')" class="w-full bg-white/80 hover:bg-white border border-white/60 p-4 rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 hover:-translate-y-1 group">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300"><i class="fas fa-user-nurse"></i></div>
+                    <div class="text-left flex-1"><h3 class="font-bold text-slate-800 group-hover:text-indigo-700 transition">เวรของฉัน</h3><p class="text-[10px] text-slate-400">ตารางงานส่วนตัว</p></div>
+                    <i class="fas fa-chevron-right text-slate-300 group-hover:text-indigo-400 transition"></i>
+                </button>
+                <button onclick="selectScheduleType('full')" class="w-full bg-white/80 hover:bg-white border border-white/60 p-4 rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-purple-100/50 hover:-translate-y-1 group ring-2 ring-purple-100">
+                    <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shadow-inner group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300"><i class="fas fa-users"></i></div>
+                    <div class="text-left flex-1"><h3 class="font-bold text-slate-800 group-hover:text-purple-700 transition">ตารางเวรรวม</h3><p class="text-[10px] text-slate-400">ภาพรวมทั้งแผนก</p></div>
+                    <i class="fas fa-check-circle text-purple-500 transition"></i>
+                </button>
+            </div>
+            <div class="mt-8"><button onclick="closeSelectionModal()" class="text-xs text-slate-400 hover:text-indigo-600 font-bold transition uppercase tracking-wide">ปิดหน้าต่าง</button></div>
+        </div>
+    </div>
+
+    <div id="detailSheetBackdrop" class="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm hidden transition-opacity duration-300" onclick="closeDetailSheet()"></div>
+    <div id="detailSheet" class="fixed bottom-0 left-0 right-0 z-50 glass-modal rounded-t-[2.5rem] shadow-[0_-10px_60px_rgba(0,0,0,0.15)] transform translate-y-full transition-transform duration-300 ease-out max-w-screen-md mx-auto border-b-0">
+        <div class="p-6 pb-safe">
+            <div class="w-12 h-1.5 bg-slate-300/50 rounded-full mx-auto mb-8"></div> 
+            <div id="sheetContent"></div>
+            <button onclick="closeDetailSheet()" class="w-full mt-4 bg-slate-100/80 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition backdrop-blur-md">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+    <script>
+        // ✅ ใช้ API_BASE จาก components.js
+        const THAI_MONTHS_FULL = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+        
+        let currentDate = new Date(); // เก็บวันที่ปัจจุบันไว้
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const token = localStorage.getItem('authToken'); 
+            
+            if(!user || !token) return window.location.href = 'login.html';
+            
+            // --- 1. ตั้งค่า AppDatePicker ---
+            const datePicker = document.getElementById('mainDatePicker');
+            
+            setTimeout(() => {
+                if(datePicker.fp) {
+                    datePicker.fp.setDate(currentDate, true); 
+                }
+            }, 100);
+
+            datePicker.addEventListener('date-change', (e) => {
+                const dateStr = e.detail.date;
+                currentDate = new Date(dateStr); 
+                loadFullSchedule(dateStr);
+            });
+        });
+
+        // --- CORE UI LOGIC ---
+
+        function changeDay(delta) {
+            currentDate.setDate(currentDate.getDate() + delta);
+            
+            const yyyy = currentDate.getFullYear();
+            const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(currentDate.getDate()).padStart(2, '0');
+            loadFullSchedule(`${yyyy}-${mm}-${dd}`);
+
+            const component = document.getElementById('mainDatePicker');
+            let fp = component.fp; 
+            
+            if (!fp) {
+                const innerInput = component.querySelector('input');
+                if (innerInput && innerInput._flatpickr) {
+                    fp = innerInput._flatpickr;
+                }
+            }
+
+            if (fp) {
+                fp.setDate(currentDate, false);
+            } else {
+                const innerInput = component.querySelector('input');
+                if (innerInput) {
+                    innerInput.value = moment(currentDate).format('D MMMM YYYY'); 
+                }
+            }
+        }
+
+        async function loadFullSchedule(dateStr) {
+            // ถ้าไม่ได้ส่ง dateStr มา ให้สร้างจาก currentDate
+            if (!dateStr) {
+                const yyyy = currentDate.getFullYear();
+                const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(currentDate.getDate()).padStart(2, '0');
+                dateStr = `${yyyy}-${mm}-${dd}`;
+            }
+
+            // --- คำนวณ Month และ Year เพื่อส่งให้ Backend ---
+            const dateObj = new Date(dateStr);
+            const month = dateObj.getMonth() + 1; // JS เริ่ม 0 ต้อง +1
+            const year = dateObj.getFullYear();
+            // ---------------------------------------------
+
+            // Reset UI
+            ['morning', 'afternoon', 'night'].forEach(s => {
+                document.getElementById(`section-${s}`).classList.add('hidden');
+                document.getElementById(`list-${s}`).innerHTML = '';
+                document.getElementById(`count-${s}`).innerText = '0';
+            });
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('loading-state').classList.remove('hidden');
+
+            const token = localStorage.getItem('authToken');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/full-schedule`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    // ✅ แก้ไข: ส่ง month และ year แทน date เพียวๆ
+                    body: JSON.stringify({ month: month, year: year })
+                });
+
+                if (res.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const data = await res.json();
+                
+                if (data.success && data.shifts.length > 0) {
+                    // กรองเฉพาะเวรของวันที่เลือก (Backend ส่งมาทั้งเดือน เราต้องเลือกโชว์แค่วันนี้)
+                    // เพราะหน้าจอนี้โชว์ทีละวัน
+                    const selectedDateString = dateObj.toISOString().split('T')[0]; 
+                    
+                    const dailyShifts = data.shifts.filter(s => {
+                        // เช็ควันที่ที่ส่งมาจาก DB (อาจมาเป็น Date string หรือ YYYY-MM-DD)
+                        return s.Nurse_Date.startsWith(dateStr) || s.Nurse_Date.startsWith(selectedDateString);
+                    });
+
+                    if(dailyShifts.length > 0) {
+                        renderShifts(dailyShifts);
+                    } else {
+                        document.getElementById('empty-state').classList.remove('hidden');
+                    }
+                    
+                } else {
+                    document.getElementById('empty-state').classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('empty-state').classList.remove('hidden');
+            } finally {
+                document.getElementById('loading-state').classList.add('hidden');
+            }
+        }
+
+        function renderShifts(shifts) {
+            const groups = { 1: [], 2: [], 3: [] }; 
+            
+            // ✅ แก้ไข: เปลี่ยน s.ShiftID เป็น s.Shift_id (ตามชื่อฟิลด์ใน Database)
+            shifts.forEach(s => { 
+                if (groups[s.Shift_id]) groups[s.Shift_id].push(s); 
+            });
+
+            const renderCard = (nurse, i) => `
+                <div class="glass-card p-3 rounded-2xl flex items-center gap-3 animate-item cursor-pointer hover:bg-white/40 transition" style="animation-delay: ${i*0.05}ms" onclick="openDetailSheet('${nurse.FirstName} ${nurse.LastName}', '${nurse.ShiftName}', '${nurse.StartTime}', '${nurse.EndTime}')">
+                    <img src="${nurse.ProfileImage ? API_BASE + '/uploads/' + nurse.ProfileImage : 'https://placehold.co/100'}" class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover bg-slate-200">
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm">${nurse.FirstName} ${nurse.LastName}</div>
+                        <div class="text-[10px] text-slate-500 bg-white/50 px-2 py-0.5 rounded-md inline-block mt-0.5">พยาบาลวิชาชีพ</div>
+                    </div>
+                </div>
+            `;
+
+            if (groups[1].length) {
+                document.getElementById('section-morning').classList.remove('hidden');
+                document.getElementById('list-morning').innerHTML = groups[1].map(renderCard).join('');
+                document.getElementById('count-morning').innerText = groups[1].length;
+            }
+            if (groups[2].length) {
+                document.getElementById('section-afternoon').classList.remove('hidden');
+                document.getElementById('list-afternoon').innerHTML = groups[2].map(renderCard).join('');
+                document.getElementById('count-afternoon').innerText = groups[2].length;
+            }
+            if (groups[3].length) {
+                document.getElementById('section-night').classList.remove('hidden');
+                document.getElementById('list-night').innerHTML = groups[3].map(renderCard).join('');
+                document.getElementById('count-night').innerText = groups[3].length;
+            }
+        }
+
+        // --- DETAIL SHEET & MODAL FUNCTIONS ---
+        function openDetailSheet(name, shiftName, start, end) {
+            const backdrop = document.getElementById('detailSheetBackdrop');
+            const sheet = document.getElementById('detailSheet');
+            const content = document.getElementById('sheetContent');
+
+            const dateStr = `${currentDate.getDate()} ${THAI_MONTHS_FULL[currentDate.getMonth()]} ${currentDate.getFullYear()+543}`;
+            
+            content.innerHTML = `
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-slate-800 mb-1">${dateStr}</h2>
+                    <span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-medium">รายละเอียดเพื่อนร่วมงาน</span>
+                </div>
+
+                <div class="flex items-center gap-5 bg-white border border-white/50 rounded-[2rem] p-6 shadow-lg mb-6 relative overflow-hidden">
+                    <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl"><i class="fas fa-user text-slate-400"></i></div>
+                    <div class="relative z-10">
+                        <div class="text-xl font-black text-slate-800 leading-tight">${name}</div>
+                        <div class="text-sm font-medium text-slate-500 mt-1">${shiftName} (${start.slice(0,5)} - ${end.slice(0,5)})</div>
+                    </div>
+                </div>
+
+                <div class="bg-white/60 p-5 rounded-3xl border border-white shadow-sm backdrop-blur-sm mb-6 flex items-center justify-between">
+                    <div class="text-xs text-slate-400 font-bold uppercase tracking-wide">สถานะ</div>
+                    <div class="font-bold text-emerald-600 flex items-center gap-2 text-lg"><i class="fas fa-check-circle"></i> ปฏิบัติงาน</div>
+                </div>
+                
+                <button onclick="window.location.href='swap_request.html'" class="w-full mt-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:scale-[1.02] transition transform active:scale-95 flex items-center justify-center gap-2"><i class="fas fa-exchange-alt"></i> ขอแลกเวรกับคนนี้</button>
+            `;
+
+            backdrop.classList.remove('hidden'); setTimeout(() => backdrop.classList.remove('opacity-0'), 10); sheet.classList.remove('translate-y-full');
+        }
+
+        function closeDetailSheet() {
+            const backdrop = document.getElementById('detailSheetBackdrop');
+            const sheet = document.getElementById('detailSheet');
+            sheet.classList.add('translate-y-full'); backdrop.classList.add('opacity-0'); setTimeout(() => backdrop.classList.add('hidden'), 300);
+        }
+
+        function openSelectionModal() {
+            const modal = document.getElementById('scheduleTypeModal');
+            const content = document.getElementById('typeModalContent');
+            modal.classList.remove('hidden');
+            setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-90'); content.classList.add('scale-100'); }, 10);
+        }
+        function closeSelectionModal() {
+            const modal = document.getElementById('scheduleTypeModal');
+            const content = document.getElementById('typeModalContent');
+            modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-90'); setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+        function selectScheduleType(type) {
+            if (type === 'personal') window.location.href = 'schedule.html';
+            else closeSelectionModal();
+        }
+    </script>
+</body>
+</html>

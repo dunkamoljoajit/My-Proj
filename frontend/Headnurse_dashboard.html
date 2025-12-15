@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Head Nurse Dashboard</title>
+    <script src="lib/tailwindcss.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="lib/flatpickr.css">
+    <script src="lib/flatpickr.js"></script>
+    <script src="lib/th.js"></script>
+    <script src="components.js"></script>
+
+    <style type="text/tailwindcss">
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #f3f4f6; 
+            color: #374151;
+        }
+        .modern-card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            border: 1px solid #f9fafb;
+        }
+        .toggle-btn {
+            @apply px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300;
+        }
+        .toggle-active-open {
+            background-color: #10b981; color: white; box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+        }
+        .toggle-active-closed {
+            background-color: #ef4444; color: white; box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+        }
+        .toggle-inactive {
+            color: #9ca3af; background-color: transparent;
+        }
+        .stat-input {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #4b5563;
+            border: 2px solid #f3f4f6;
+            border-radius: 16px;
+            padding: 12px;
+            transition: all 0.2s;
+        }
+        .stat-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            background-color: #fff;
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(to right, #8b5cf6, #7c3aed);
+            color: white;
+            font-weight: 600;
+            border-radius: 16px;
+            padding: 14px;
+            transition: transform 0.1s;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+        .btn-disabled {
+            background: white !important; /* สีม่วงอ่อน (Violet-200) */
+            color: rgb(15, 14, 14) !important;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none !important;
+            border: none;
+        }
+        .btn-primary:active { transform: scale(0.98); }
+        .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <header class="bg-white sticky top-0 z-50 border-b border-gray-100 shadow-sm">
+        <div class="max-w-screen-md mx-auto px-4 py-3 flex justify-between items-center">
+            
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-violet-200">
+                    <i class="fas fa-user-md text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-gray-800 leading-none">HEAD NURSE</h1>
+                    <p class="text-[10px] text-gray-400 font-medium tracking-wide mt-0.5">ADMINISTRATION</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="hidden sm:block text-right">
+                    <p class="text-xs text-gray-400" id="current-date">...</p>
+                </div>
+
+                <div id="profile-menu-trigger" class="relative flex items-center gap-2 cursor-pointer bg-gray-50 hover:bg-gray-100 px-2 py-1.5 rounded-full border border-gray-100 transition select-none">
+                    <div id="admin-img-placeholder" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border border-white shadow-sm">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <img id="admin-img" crossorigin="anonymous" class="w-8 h-8 rounded-full object-cover border border-white shadow-sm hidden" src="" alt="Admin">
+                    
+                    <div class="pr-2 text-right hidden sm:block">
+                        <p class="text-xs font-bold text-gray-700 leading-none" id="admin-name">Loading...</p>
+                        <p class="text-[9px] text-emerald-500 font-bold mt-0.5">● Online</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto bg-[#f8f9fa] pb-32">
+        <div class="max-w-screen-md mx-auto p-4 space-y-6">
+
+            <div class="modern-card p-6 relative">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <i class="fas fa-sliders-h text-violet-600"></i> ตั้งค่าระบบรับเวร
+                        </h2>
+                        <p class="text-xs text-gray-400 mt-1" id="period-status-text">กำลังตรวจสอบสถานะ...</p>
+                    </div>
+                    
+                    <div class="flex bg-gray-100 p-1 rounded-full">
+                        <button onclick="togglePeriod('Open')" id="btn-open" class="toggle-btn toggle-inactive">OPEN</button>
+                        <button onclick="togglePeriod('Closed')" id="btn-closed" class="toggle-btn toggle-inactive">CLOSED</button>
+                    </div>
+                </div>
+
+                <form id="scheduleSettingsForm" class="space-y-6">
+                    <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3 block text-center">จำนวนพยาบาลต่อเวร</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="text-center">
+                                <div class="text-xs text-gray-500 mb-2 font-medium"><i class="fas fa-sun text-amber-400 mr-1"></i>เช้า</div>
+                                <input type="number" id="quotaMorning" class="stat-input w-full" value="" placeholder="0" min="1" required>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xs text-gray-500 mb-2 font-medium"><i class="fas fa-cloud-sun text-orange-400 mr-1"></i>บ่าย</div>
+                                <input type="number" id="quotaAfternoon" class="stat-input w-full" value="" placeholder="0" min="1" required>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xs text-gray-500 mb-2 font-medium"><i class="fas fa-moon text-indigo-400 mr-1"></i>ดึก</div>
+                                <input type="number" id="quotaNight" class="stat-input w-full" value="" placeholder="0" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">วันปิดรับข้อมูล (DEADLINE)</label>
+                        <div id="date-container" class="relative group">
+                            <input type="text" id="deadlineDate" placeholder="เลือกวันที่..." class="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-3 pl-11 text-sm font-medium text-gray-700 focus:border-violet-500 focus:ring-4 focus:ring-violet-50 transition outline-none cursor-pointer" required>
+                            <i class="fas fa-calendar-alt absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-violet-500 transition-colors"></i>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btn-save-settings" class="btn-primary w-full flex items-center justify-center gap-2">
+                        <i class="fas fa-save"></i> บันทึกการตั้งค่า
+                    </button>
+                </form>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <a href="approve_swap.html" class="modern-card p-5 relative overflow-hidden group cursor-pointer block hover:-translate-y-1 transition-transform">
+                    <div class="flex justify-between items-start">
+                        <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded-full">Swap</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 class="text-3xl font-bold text-gray-800" id="pending-swap-count">-</h3>
+                        <p class="text-xs text-gray-400 font-medium">คำขอแลกเวร</p>
+                    </div>
+                </a>
+
+                <a href="approve_trade.html" class="modern-card p-5 relative overflow-hidden group cursor-pointer block hover:-translate-y-1 transition-transform">
+                    <div class="flex justify-between items-start">
+                        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-lg">
+                            <i class="fas fa-hand-holding-usd"></i>
+                        </div>
+                        <span class="bg-amber-50 text-amber-600 text-[10px] font-bold px-2 py-1 rounded-full">Trade</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 class="text-3xl font-bold text-gray-800" id="pending-trade-count">-</h3>
+                        <p class="text-xs text-gray-400 font-medium">คำขอซื้อขาย</p>
+                    </div>
+                </a>
+            </div>
+
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">เมนูจัดการ</h3>
+                
+                <a href="constraint_form.html" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-violet-200 transition-all duration-200 cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-violet-50 rounded-full flex items-center justify-center text-violet-600 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-user-clock text-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-700 group-hover:text-violet-700 transition-colors">ส่งข้อจำกัด (ส่วนตัว)</h4>
+                            <p class="text-[10px] text-gray-400">สำหรับหัวหน้าพยาบาล</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300 group-hover:text-violet-500 transition-colors"></i>
+                </a>
+
+                <a href="nurse_list.html" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-blue-200 transition-all duration-200 cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-users text-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-700 group-hover:text-blue-700 transition-colors">รายชื่อพยาบาล</h4>
+                            <p class="text-[10px] text-gray-400">จัดการข้อมูลบุคลากร</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300 group-hover:text-blue-500 transition-colors"></i>
+                </a>
+
+                <a href="admin-import.html" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-green-400 transition-all duration-200 cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-file-excel text-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-700 group-hover:text-green-700 transition-colors">นำเข้าข้อมูล (Excel)</h4>
+                            <p class="text-[10px] text-gray-400">อัปโหลดไฟล์รายชื่อพยาบาล</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300 group-hover:text-green-500 transition-colors"></i>
+                </a>
+            </div>
+
+            <a href="generate_schedule.html" id="btn-generate-real" class="hidden bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white p-5 rounded-2xl shadow-lg shadow-fuchsia-200 flex items-center justify-between group hover:scale-[1.02] transition-transform cursor-pointer mt-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                        <i class="fas fa-wand-magic-sparkles text-xl animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg">สร้างตารางเวร</h4>
+                        <p class="text-xs text-fuchsia-100">ข้อมูลครบถ้วน พร้อมประมวลผล</p>
+                    </div>
+                </div>
+                <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white group-hover:text-fuchsia-600 transition-colors">
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </div>
+            </a>
+
+            <div id="status-bar-container" class="text-center py-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-medium border border-gray-200">
+                    <i class="fas fa-circle-notch fa-spin mr-2 text-violet-500"></i> <span id="status-bar-text">กำลังเชื่อมต่อฐานข้อมูล...</span>
+                </span>
+            </div>
+
+        </div>
+    </main>
+
+    <app-navbar></app-navbar>
+
+    <script>
+        const API_URL = (typeof API_BASE !== 'undefined') ? API_BASE : 'http://localhost:3000';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkHeadNurseRole();
+            setupMenu();
+            updateDate();
+            setupCalendar();
+            loadAllData();
+        });
+
+        // 🟢 Functions
+        function setupMenu() {
+            const trigger = document.getElementById('profile-menu-trigger');
+            if(!trigger) return;
+            
+            if(!trigger.querySelector('#custom-dropdown')) {
+                const html = `
+                <div id="custom-dropdown" class="hidden absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60] animate-fade-in-up origin-top-right">
+                    <a href="profile-edit.html" class="flex items-center px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 transition">
+                        <i class="fas fa-user-edit w-5 mr-2 text-violet-500"></i> แก้ไขโปรไฟล์
+                    </a>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button id="custom-logout-btn" class="w-full text-left flex items-center px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition">
+                        <i class="fas fa-sign-out-alt w-5 mr-2"></i> ออกจากระบบ
+                    </button>
+                </div>`;
+                trigger.insertAdjacentHTML('beforeend', html);
+            }
+
+            const dropdown = document.getElementById('custom-dropdown');
+            
+            trigger.addEventListener('click', (e) => { 
+                e.stopPropagation(); 
+                dropdown.classList.toggle('hidden'); 
+            });
+
+            document.addEventListener('click', (e) => { 
+                if(!trigger.contains(e.target)) dropdown.classList.add('hidden'); 
+            });
+            
+            const logoutBtn = document.getElementById('custom-logout-btn');
+            if(logoutBtn) {
+                logoutBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if(!confirm('ยืนยันการออกจากระบบ?')) return;
+                    
+                    const user = JSON.parse(localStorage.getItem('user'));
+                    const token = localStorage.getItem('authToken');
+                    
+                    if(user) {
+                        try { 
+                            await fetch(`${API_URL}/api/logout`, { 
+                                method:'POST', 
+                                headers:{
+                                    'Content-Type':'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                }, 
+                                body:JSON.stringify({userId:user.UserID}) 
+                            }); 
+                        } catch(e) {}
+                    }
+                    localStorage.clear(); 
+                    window.location.href='login.html';
+                });
+            }
+        }
+
+        function checkHeadNurseRole() {
+            try {
+                const userStr = localStorage.getItem('user');
+                if (!userStr) throw new Error("No user found");
+
+                const user = JSON.parse(userStr);
+                
+                // เช็ค RoleID = 1 (Head Nurse)
+                if (user.RoleID !== 1) {
+                    throw new Error("Unauthorized");
+                }
+
+                // แสดงข้อมูลจริง
+                document.getElementById('admin-name').innerText = `${user.FirstName} ${user.LastName}`;
+                
+                // จัดการรูปโปรไฟล์ (ไม่มี Mock Data)
+                const imgPlaceholder = document.getElementById('admin-img-placeholder');
+                const imgEl = document.getElementById('admin-img');
+                
+                if(user.ProfileImage) {
+                    const imgUrl = user.ProfileImage.startsWith('http') ? user.ProfileImage : `${API_URL}/uploads/${user.ProfileImage}`;
+                    imgEl.src = imgUrl;
+                    imgEl.classList.remove('hidden');
+                    imgPlaceholder.classList.add('hidden');
+
+                    // ถ้าโหลดรูปไม่ติด ให้กลับไปใช้ Icon
+                    imgEl.onerror = function() { 
+                        this.classList.add('hidden');
+                        imgPlaceholder.classList.remove('hidden');
+                    };
+                } else {
+                    // ไม่มีรูป ใช้ Icon
+                    imgEl.classList.add('hidden');
+                    imgPlaceholder.classList.remove('hidden');
+                }
+
+            } catch (e) {
+                console.error("Access Denied:", e);
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+        }
+
+        function updateDate() {
+            const dateEl = document.getElementById('current-date');
+            if(dateEl) dateEl.innerText = new Date().toLocaleDateString('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+        }
+
+        function setupCalendar() {
+            flatpickr("#deadlineDate", { locale:"th", dateFormat:"Y-m-d", altInput:true, altFormat:"j F Y", disableMobile:true, appendTo:document.getElementById('date-container') });
+        }
+
+        async function loadAllData() {
+            const token = localStorage.getItem('authToken');
+            const statusBarText = document.getElementById('status-bar-text');
+
+            try {
+                // ดึงข้อมูลจริงจาก 3 Endpoints พร้อมกัน
+                const [settingsRes, statusRes, pendingRes] = await Promise.all([
+                    fetch(`${API_URL}/api/admin/get-settings`, {headers:{'Authorization':`Bearer ${token}`}}),
+                    fetch(`${API_URL}/api/check-constraint-window`, {headers:{'Authorization':`Bearer ${token}`}}),
+                    fetch(`${API_URL}/api/admin/pending-counts`, {headers:{'Authorization':`Bearer ${token}`}})
+                ]);
+
+                // 1. Settings Data
+                const settings = await settingsRes.json();
+                if(settings.success && settings.settings) {
+                    document.getElementById('quotaMorning').value = settings.settings.morning;
+                    document.getElementById('quotaAfternoon').value = settings.settings.afternoon;
+                    document.getElementById('quotaNight').value = settings.settings.night;
+                    if(settings.settings.deadline) document.getElementById("deadlineDate")._flatpickr.setDate(settings.settings.deadline, true);
+                }
+
+                // 2. Status Data (Open/Closed)
+                const status = await statusRes.json();
+                updatePeriodUI(status.isOpen);
+
+                // 3. Counts Data
+                const pending = await pendingRes.json();
+                if(pending.success) {
+                    document.getElementById('pending-swap-count').innerText = pending.swapCount;
+                    document.getElementById('pending-trade-count').innerText = pending.tradeCount;
+                }
+
+                statusBarText.innerText = "ข้อมูลล่าสุด";
+                
+            } catch(e) { 
+                console.error(e);
+                statusBarText.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+                statusBarText.classList.add('text-red-500');
+            }
+        }
+
+        function updatePeriodUI(isOpen) {
+            const btnOpen = document.getElementById('btn-open');
+            const btnClosed = document.getElementById('btn-closed');
+            const statusText = document.getElementById('period-status-text');
+            const saveBtn = document.getElementById('btn-save-settings');
+            const inputs = document.querySelectorAll('#scheduleSettingsForm input');
+            const btnGenerate = document.getElementById('btn-generate-real');
+
+            // Reset Classes ปุ่ม Toggle
+            btnOpen.className = 'toggle-btn toggle-inactive';
+            btnClosed.className = 'toggle-btn toggle-inactive';
+
+            if(isOpen) {
+                // 🟢 สถานะ: เปิดรับข้อมูล (OPEN)
+                btnOpen.className = 'toggle-btn toggle-active-open';
+                statusText.innerHTML = '<span class="text-emerald-500 font-bold">● เปิดรับข้อมูล</span>';
+                
+                // ล็อค Input ทั้งหมดในฟอร์ม
+                inputs.forEach(el => el.disabled = true);
+                
+                // ล็อกปุ่มบันทึก (ใช้ Class ใหม่ที่คุณเลือก)
+                saveBtn.disabled = true;
+                saveBtn.classList.remove('btn-primary'); // เอาสีหลักออก
+                saveBtn.classList.add('btn-disabled');   // ใส่ Style ปุ่มล็อก (สีอ่อน/สีขาว)
+                saveBtn.innerHTML = '<i class="fas fa-lock"></i> ระบบเปิดอยู่ (ล็อกการแก้ไข)';
+                
+                // ซ่อนปุ่ม Generate
+                btnGenerate.classList.add('hidden');
+
+            } else {
+                // 🔴 สถานะ: ปิดรับข้อมูล (CLOSED)
+                btnClosed.className = 'toggle-btn toggle-active-closed';
+                statusText.innerHTML = '<span class="text-rose-500 font-bold">● ปิดรับข้อมูล</span>';
+
+                // ปลดล็อคให้แก้ไขค่าได้
+                inputs.forEach(el => el.disabled = false);
+
+                // คืนค่าปุ่มบันทึกกลับเป็นปกติ
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('btn-disabled'); // เอา Style ปุ่มล็อกออก
+                saveBtn.classList.add('btn-primary');     // กลับมาใช้สีหลัก
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการตั้งค่า';
+
+                // แสดงปุ่ม Generate
+                btnGenerate.classList.remove('hidden');
+            }
+        }
+        async function togglePeriod(status) {
+            if(!confirm(`ยืนยันการ "${status==='Open'?'เปิด':'ปิด'}" ระบบ?\n\n${status==='Open' ? 'เมื่อเปิดระบบ พยาบาลจะสามารถส่งเวรได้ และคุณจะไม่สามารถแก้ไขการตั้งค่าได้' : 'เมื่อปิดระบบ พยาบาลจะไม่สามารถส่งเวรได้ และคุณสามารถกดสร้างตารางเวรได้'}`)) return;
+            
+            const res = await fetch(`${API_URL}/api/admin/toggle-window`, {
+                method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('authToken')}`},
+                body:JSON.stringify({status})
+            });
+            const d = await res.json();
+            if(d.success) {
+                updatePeriodUI(status==='Open');
+                // Reload data to reflect any side effects
+                loadAllData();
+            }
+        }
+
+        document.getElementById('scheduleSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const saveBtn = document.getElementById('btn-save-settings');
+            const originalBtnText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+            const m = document.getElementById('quotaMorning').value;
+            const a = document.getElementById('quotaAfternoon').value;
+            const n = document.getElementById('quotaNight').value;
+            // ใช้ .value ปกติเพราะ flatpickr จะ update hidden input ให้อัตโนมัติ (เป็น Y-m-d)
+            const d = document.getElementById('deadlineDate').value;
+            
+            if(!m || !a || !n || !d) {
+                alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnText;
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/save-settings`, {
+                    method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('authToken')}`},
+                    body:JSON.stringify({morning:m, afternoon:a, night:n, deadline:d})
+                });
+                
+                const result = await res.json();
+                
+                if(result.success) {
+                    alert('บันทึกการตั้งค่าเรียบร้อย! \n(คุณสามารถกดปุ่ม "OPEN" ด้านบนเมื่อพร้อมเปิดระบบ)');
+                    // ไม่ต้องสั่ง togglePeriod('Open') ที่นี่ เพื่อให้ User ตรวจทานได้ก่อน
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalBtnText;
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + (result.message || 'Unknown error'));
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalBtnText;
+                }
+            } catch (err) {
+                console.error(err);
+                alert('ไม่สามารถเชื่อมต่อ Server ได้');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnText;
+            }
+        });
+    </script>
+</body>
+</html>

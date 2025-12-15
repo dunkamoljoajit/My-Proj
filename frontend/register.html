@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTONURSESHIFT - ลงทะเบียน</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;700&family=Prompt:wght@700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box; 
+        }
+
+        html, body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f0f2f5; 
+        }
+
+        body {
+             background-image: url('background01.png'); 
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Kanit', sans-serif;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .logo {
+            position: absolute;
+            top: 30px;
+            left: 40px;
+            font-family: "Prompt", sans-serif;
+            display: flex; 
+            align-items: center;
+        }
+        .logo-text {
+            font-size: 1.5rem; 
+            font-weight: 600;
+            color: #1e2a78;
+        }
+        .logo-img {
+           width: 50px;
+           height: 50px;
+           object-fit: contain; 
+        }
+        .home-button {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            background-color: #191970;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-family: 'Kanit', sans-serif;
+            font-weight: 500;
+        }
+        .register-container {
+            background: #ffffff;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+            width: 500px; 
+            max-width: 100%;
+            text-align: center;
+        }
+        .register-container h2 {
+            color: #191970; 
+            font-size: 2.8rem;
+            margin-bottom: 2.5rem;
+        }
+        
+        .input-group {
+            position: relative;
+            margin-bottom: 0.75rem; 
+        }
+        
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 18px 25px 18px 60px;
+            border: 1px solid #eee;
+            border-radius: 50px; 
+            font-size: 1rem;
+            font-family: 'Kanit', sans-serif;
+            outline: none; 
+            appearance: none; 
+            box-sizing: border-box;
+        }
+        
+        .input-group input[type="password"],
+        .input-group input[type="text"] {
+             padding-right: 60px;
+        }
+        
+        .input-group input::placeholder { color: #aaa; }
+        .input-group select { color: #aaa; }
+        .input-group select:valid { color: #333; }
+        
+        .input-group .icon-left {
+            position: absolute;
+            left: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            width: 20px; 
+            text-align: center;
+        }
+        
+        .input-group .icon-right-arrow {
+            position: absolute;
+            right: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+            pointer-events: none; 
+        }
+        /* สไตล์สำหรับไอคอนเปิด/ปิดรหัสผ่าน */
+        .input-group .icon-right-toggle {
+            position: absolute;
+            right: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            z-index: 5; 
+        }
+        .input-group .icon-right-toggle:hover {
+            color: #555;
+        }
+        
+        .validation-box {
+            text-align: left;
+            padding: 1rem 1rem;
+            margin-top: 0.15rem;
+            margin-bottom: 0.75rem; 
+            border: 1px solid #fde8e8; 
+            background-color: #fefafa; 
+            border-radius: 15px;
+        }
+        .validation-box .validation-title {
+            color: #d9534f; 
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .validation-box ul li {
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.3rem;
+            transition: color 0.3s ease;
+        }
+        .validation-box ul li.invalid { color: #d9534f; }
+        .validation-box ul li.invalid::before {
+            content: '×'; 
+            font-weight: 700;
+            min-width: 20px;
+            margin-right: 8px;
+        }
+
+        .validation-box ul li.valid { color: #28a745; }
+        .validation-box ul li.valid::before {
+            content: '✓'; 
+            font-weight: 700;
+            min-width: 20px;
+            margin-right: 8px;
+        }
+
+        .register-button {
+            background-color: #191970; 
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            font-family: 'Kanit', sans-serif;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 1rem; 
+            width: 100%;       
+            display: block;
+        }
+
+        .register-button:hover {
+            background-color: #2c2c94; 
+        }
+
+        /* --- ปุ่ม Home ที่มุมขวาบน --- */
+        .home-button {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            background-color: #191970;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-family: 'Kanit', sans-serif;
+            font-weight: 500;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.3s ease;
+        }
+
+        .home-button:hover {
+            background-color: #2c2c94;
+        }
+        
+        .home-button i {
+            font-size: 1rem;
+        }
+        /* -------------------------- */
+/*  MOBILE (จอเล็ก < 480px)   */
+/* -------------------------- */
+@media (max-width: 480px) {
+
+    body {
+        padding: 1rem;
+        background-size: cover;
+    }
+
+    .logo {
+        top: 15px;
+        left: 15px;
+    }
+
+    .logo-img {
+        width: 40px;
+        height: 40px;
+    }
+
+    .logo-text {
+        font-size: 1.2rem;
+    }
+
+    .home-button {
+        top: 15px;
+        right: 15px;
+        padding: 6px 14px;
+        font-size: 0.75rem;
+    }
+
+    .register-container {
+        width: 100%;
+        padding: 1.8rem 1.3rem;
+        border-radius: 15px;
+    }
+
+    .register-container h2 {
+        font-size: 2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .input-group input,
+    .input-group select {
+        padding: 14px 20px 14px 50px;
+        font-size: 0.9rem;
+    }
+
+    .validation-box ul li {
+        font-size: 0.75rem;
+    }
+
+    .register-button {
+        font-size: 1rem;
+        padding: 12px;
+    }
+}
+
+/* -------------------------- */
+/*  iPAD (768px – 1024px)     */
+/* -------------------------- */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+    .register-container {
+        width: 70%;
+        padding: 2.5rem;
+    }
+
+    .register-container h2 {
+        font-size: 2.6rem;
+    }
+
+    .input-group input,
+    .input-group select {
+        padding: 16px 22px 16px 55px;
+        font-size: 1.05rem;
+    }
+
+    .register-button {
+        font-size: 1.2rem;
+    }
+}
+
+
+/* -------------------------- */
+/*  iPAD PRO (1024px – 1366px)*/
+/* -------------------------- */
+@media (min-width: 1024px) and (max-width: 1366px) {
+
+    body {
+        background-size: cover;
+    }
+
+    .register-container {
+        width: 55%;
+        padding: 3rem;
+    }
+
+    .register-container h2 {
+        font-size: 3rem;
+    }
+
+    .input-group input,
+    .input-group select {
+        font-size: 1.1rem;
+        padding: 18px 25px 18px 60px;
+    }
+
+    .register-button {
+        font-size: 1.3rem;
+    }
+}
+
+    </style>
+</head>
+<body>
+    <div class="logo">
+      <img src="logo.png" alt="logo" class="logo-img">
+      <span class="logo-text">AUTONURSESHIFT</span>
+    </div>
+    <a href="nologin.html" class="home-button">
+        <i class="fas fa-home"></i>&nbsp;Home
+    </a>
+    <div class="register-container">
+        <h2>ลงทะเบียน</h2>
+    
+        <form class="register-form" action="/api/register" method="POST">
+            
+            <div class="input-group">
+                <i class="fas fa-user icon-left"></i> 
+                <input type="text" placeholder="ชื่อ" name="FirstName" required>
+            </div>
+            <div class="input-group">
+                <i class="fas fa-user icon-left"></i> 
+                <input type="text" placeholder="นามสกุล" name="LastName" required>
+            </div>
+            
+            <div class="input-group">
+                 <i class="fas fa-envelope icon-left"></i> 
+               <input type="email" placeholder="E-mail" name="Email" required id="email">
+            </div>
+
+            <div class="validation-box">
+                <p class="validation-title">
+                    <i class="fas fa-info-circle"></i> ข้อกำหนดอีเมล
+                </p>
+                <ul>
+                    <li id="email-format" class="invalid">รูปแบบอีเมลถูกต้อง (e.g., name@domain.com)</li>
+                </ul>
+            </div>
+            
+            <div class="input-group">
+                <i class="fas fa-lock icon-left"></i>
+                <input type="password" placeholder="รหัสผ่าน" name="Password" required id="password">
+                <i class="fas fa-eye icon-right-toggle" id="toggle-password"></i>
+            </div>
+            
+            <div class="input-group">
+                <i class="fas fa-lock icon-left"></i>
+                <input type="password" placeholder="ยืนยันรหัสผ่าน" name="ConfirmPassword" required id="confirm-password">
+                <i class="fas fa-eye icon-right-toggle" id="toggle-confirm-password"></i>
+            </div>
+
+            <div class="validation-box">
+                <p class="validation-title">
+                    <i class="fas fa-info-circle"></i> ข้อกำหนดรหัสผ่าน
+                </p>
+                <ul>
+                    <li id="length" class="invalid">ความยาวอย่างน้อย 8 ตัวอักษร</li>
+                    <li id="upper" class="invalid">ตัวอักษรพิมพ์ใหญ่ (A-Z)</li>
+                    <li id="lower" class="invalid">ตัวอักษรพิมพ์เล็ก (a-z)</li>
+                    <li id="number" class="invalid">ตัวเลข (0-9)</li>
+                    <li id="special" class="invalid">อักขระพิเศษ (!.@#$%^&*_-)</li>
+                    <li id="match" class="invalid">รหัสผ่านตรงกัน</li> 
+                </ul>
+            </div>
+            
+            <div class="input-group">
+                <i class="fas fa-user-nurse icon-left"></i>
+                <select name="RoleID" required id="role-select">
+                    <option value="" disabled selected>...กำลังโหลดตำแหน่งงาน...</option>
+                </select>
+                <i class="fas fa-chevron-down icon-right-arrow"></i>
+            </div>
+            
+            <button type="submit" class="register-button" id="register-btn" disabled>ลงทะเบียน</button>
+        </form>
+            
+
+    <script>
+        // (ส่วน JavaScript ถูกรวมมาเหมือนเดิม)
+        
+        // --- (ส่วนที่ 1: JavaScript สำหรับโหลด Role) ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const roleSelect = document.getElementById('role-select');
+            const apiUrl = 'http://localhost:3000/api/roles';
+            fetch(apiUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok, using fallback data.');
+                    }
+                    return response.json();
+                })
+                .then(roles => {
+                    roleSelect.innerHTML = ''; 
+                    roleSelect.add(new Option("เลือกตำแหน่งงาน", "", true, true)); 
+                    roleSelect.querySelector('option[value=""]').disabled = true;
+                    roles.forEach(role => { 
+                        roleSelect.add(new Option(role.Role, role.RoleID));
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching roles:', error);
+                    roleSelect.innerHTML = '';
+                    roleSelect.add(new Option("ไม่สามารถโหลดตำแหน่งได้", "", true, true));
+                    fallbackRoles.forEach(role => { 
+                        roleSelect.add(new Option(role.Role, role.RoleID));
+                    });
+                    roleSelect.querySelector('option[value=""]').disabled = true;
+                });
+        });
+
+
+        // --- (ส่วนที่ 2: JavaScript สำหรับ Validate Password และ Email) ---
+        const emailInput = document.getElementById('email');
+        const emailFormatCheck = document.getElementById('email-format');
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        let isEmailValid = false;
+
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirm-password');
+        const lengthCheck = document.getElementById('length');
+        const upperCheck = document.getElementById('upper');
+        const lowerCheck = document.getElementById('lower');
+        const numberCheck = document.getElementById('number');
+        const specialCheck = document.getElementById('special');
+        const matchCheck = document.getElementById('match'); 
+        let isPasswordValid = false;
+        let isMatchValid = false;
+
+        const registerBtn = document.getElementById('register-btn');
+        const registerForm = document.querySelector('.register-form'); 
+
+        function updateValidationUI(element, isValid) {
+            if (isValid) {
+                element.classList.remove('invalid');
+                element.classList.add('valid');
+            } else {
+                element.classList.remove('valid');
+                element.classList.add('invalid');
+            }
+        }
+
+        function validateEmail() {
+            const emailValue = emailInput.value;
+            isEmailValid = emailRegex.test(emailValue);
+            updateValidationUI(emailFormatCheck, isEmailValid);
+            checkFormValidity(); 
+        }
+
+        function validatePassword() {
+            const passValue = passwordInput.value;
+            let allConditionsMet = true; 
+
+            const isLengthValid = passValue.length >= 8;
+            updateValidationUI(lengthCheck, isLengthValid);
+            if (!isLengthValid) allConditionsMet = false;
+
+            const isUpperValid = /[A-Z]/.test(passValue);
+            updateValidationUI(upperCheck, isUpperValid);
+            if (!isUpperValid) allConditionsMet = false;
+            
+            const isLowerValid = /[a-z]/.test(passValue);
+            updateValidationUI(lowerCheck, isLowerValid);
+            if (!isLowerValid) allConditionsMet = false;
+
+            const isNumberValid = /[0-9]/.test(passValue);
+            updateValidationUI(numberCheck, isNumberValid);
+            if (!isNumberValid) allConditionsMet = false;
+
+            const isSpecialValid = /[!.@#$%^&*_-]/.test(passValue);
+            updateValidationUI(specialCheck, isSpecialValid);
+            if (!isSpecialValid) allConditionsMet = false;
+
+            isPasswordValid = allConditionsMet;
+            validateMatch(); 
+            checkFormValidity(); 
+        }
+
+        function validateMatch() {
+            const passValue = passwordInput.value;
+            const confirmValue = confirmPasswordInput.value;
+
+            isMatchValid = (passValue === confirmValue) && (passValue.length > 0); 
+            updateValidationUI(matchCheck, isMatchValid);
+            checkFormValidity();
+        }
+
+        function checkFormValidity() {
+            const formElements = registerForm.querySelectorAll('input[required], select[required]');
+            let allRequiredFilled = Array.from(formElements).every(el => el.value !== "");
+
+            if (isEmailValid && isPasswordValid && isMatchValid && allRequiredFilled) {
+                registerBtn.disabled = false;
+            } else {
+                registerBtn.disabled = true;
+            }
+        }
+
+        emailInput.addEventListener('input', validateEmail);
+        passwordInput.addEventListener('input', validatePassword);
+        confirmPasswordInput.addEventListener('input', validateMatch);
+        document.getElementById('role-select').addEventListener('change', checkFormValidity);
+
+        
+        // --- (ส่วนที่ 3: (เพิ่มส่วนนี้) JavaScript สำหรับ Toggle Password) ---
+        
+        // เลือก Elements ที่เพิ่มเข้ามา
+        const togglePassword = document.getElementById('toggle-password');
+        const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
+
+        // ฟังก์ชันสำหรับสลับการแสดงผล (ใช้ chung)
+        function toggleVisibility(inputElement, iconElement) {
+            // สลับ type ของ input
+            const type = inputElement.getAttribute('type') === 'password' ? 'text' : 'password';
+            inputElement.setAttribute('type', type);
+            
+            // สลับไอคอน
+            if (type === 'password') {
+                // ถ้าเป็น password (ซ่อน)
+                iconElement.classList.remove('fa-eye-slash');
+                iconElement.classList.add('fa-eye');
+            } else {
+                // ถ้าเป็น text (แสดง)
+                iconElement.classList.remove('fa-eye');
+                iconElement.classList.add('fa-eye-slash');
+            }
+        }
+
+        // เพิ่ม Event Listeners ให้ไอคอน
+        togglePassword.addEventListener('click', () => {
+            // เรียกใช้ฟังก์ชัน โดยส่ง input (ที่มีอยู่แล้ว) และ icon (ที่เพิ่มใหม่)
+            toggleVisibility(passwordInput, togglePassword);
+        });
+
+        toggleConfirmPassword.addEventListener('click', () => {
+            // เรียกใช้ฟังก์ชัน โดยส่ง input (ที่มีอยู่แล้ว) และ icon (ที่เพิ่มใหม่)
+            toggleVisibility(confirmPasswordInput, toggleConfirmPassword);
+        });
+
+
+
+        registerForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); 
+            const formData = new FormData(registerForm);
+            const data = Object.fromEntries(formData.entries());
+            const apiUrl = 'http://localhost:3000/api/register';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify(data) 
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    window.location.href = 'register_cp.html'; 
+                
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                alert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+            }
+        });
+
+    </script>
+    </div>
+</body>
+</html>

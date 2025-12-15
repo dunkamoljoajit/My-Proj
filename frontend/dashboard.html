@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AUTONURSESHIFT - หน้าหลัก</title>
+    
+    <link href="./style.css" rel="stylesheet">
+    <script src="components.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/th.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #f8fafc; 
+            /* อย่าลืมเช็คว่ารูป background06.png อยู่ใน folder frontend ด้วยนะครับ */
+            background-image: url('background06.png'); 
+            background-size: cover; 
+            background-attachment: fixed; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
+        .animate-enter { animation: floatUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        @keyframes floatUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        .interactive-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .interactive-card { transition: all 0.3s; }
+    </style>
+</head>
+
+<body class="text-slate-800 antialiased">
+<div class="flex flex-col h-screen relative overflow-hidden">
+
+    <app-header></app-header>
+
+    <main class="flex-1 overflow-y-auto overflow-x-hidden pb-32 scroll-smooth">
+        <div class="max-w-screen-md mx-auto p-4 md:p-6 space-y-6">
+
+            <div class="animate-enter bg-white rounded-3xl shadow-sm p-6 border border-slate-100 interactive-card relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-indigo-50 rounded-full blur-2xl opacity-60 pointer-events-none"></div>
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 relative z-10">
+                    <span class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm shadow-inner"><i class="fas fa-clock"></i></span>
+                    เวรที่กำลังจะมาถึง
+                </h2>
+                <div id="upcoming-shift-container" class="space-y-3 relative z-10">
+                    <div class="animate-pulse flex space-x-4 p-4 border border-slate-100 rounded-2xl bg-slate-50/50">
+                        <div class="h-4 bg-slate-200 rounded w-3/4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stats-grid" class="grid grid-cols-2 gap-4"></div>
+
+            <div class="animate-enter delay-300 relative rounded-3xl shadow-lg shadow-indigo-200 overflow-hidden interactive-card">
+                <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-500"></div>
+                <div class="relative p-7 text-white">
+                    <h2 class="text-xl font-bold mb-2">จัดการเวรของคุณ</h2>
+                    <div class="flex flex-wrap gap-3 mt-4">
+                        <a href="schedule.html" class="flex-1 bg-white/10 backdrop-blur-md border border-white/20 text-white text-center py-2.5 rounded-xl hover:bg-white hover:text-indigo-600 transition-all">
+                            <i class="fas fa-calendar-alt mr-1"></i> ตารางเวร
+                        </a>
+                        <a href="swap_request.html" class="flex-1 bg-white text-indigo-600 text-center font-bold py-2.5 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                            ขอแลกเวร <i class="fas fa-arrow-right ml-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <button id="constraintBtn" class="hidden fixed bottom-24 right-5 w-14 h-14 bg-rose-500 text-white rounded-full shadow-lg flex items-center justify-center z-40 animate-enter"><i class="fas fa-calendar-times text-xl"></i></button>
+
+    <app-navbar></app-navbar>
+
+</div>
+
+
+<script>
+
+
+// Logic หน้า Dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    // Auth Check
+    const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('authToken'); 
+
+    if (!storedUser || !token) {
+        window.location.href = 'login.html';
+        return;
+    }
+    const currentUser = JSON.parse(storedUser);
+    if (currentUser.RoleID !== 2) {
+        alert('หน้านี้สำหรับพยาบาลเท่านั้น');
+        window.location.href = 'login.html'; 
+        return; // หยุดการทำงานทันที
+    }
+
+    // เรียกฟังก์ชันทำงาน
+    renderStatsGrid();
+    loadDashboardData();
+    checkConstraintWindow();
+});
+
+// --- HELPER COMPONENTS ---
+
+const ShiftCard = (shift, index) => {
+    // Logic สี Theme ตามกะ
+    let theme = shift.ShiftName.includes('บ่าย') ? 'border-l-orange-500' : (shift.ShiftName.includes('ดึก') ? 'border-l-purple-500' : 'border-l-blue-500');
+    let icon = shift.ShiftName.includes('บ่าย') ? 'fa-cloud-sun text-orange-500' : (shift.ShiftName.includes('ดึก') ? 'fa-moon text-purple-500' : 'fa-sun text-blue-500');
+    
+    return `
+        <div class="flex justify-between items-center p-3.5 rounded-xl border border-slate-100 ${theme} bg-white shadow-sm animate-enter" style="animation-delay: ${index * 150}ms">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center"><i class="fas ${icon}"></i></div>
+                <div>
+                    <div class="font-bold text-slate-700">${shift.ShiftName}</div>
+                    <div class="text-xs text-slate-400">${moment(shift.Nurse_Date).format('D MMM')} | ${shift.StartTime?.slice(0,5)}-${shift.EndTime?.slice(0,5)}</div>
+                </div>
+            </div>
+            <div class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">${shift.WardName || '-'}</div>
+        </div>`;
+};
+
+const StatCard = ({ id, label, gradient }) => `
+    <div class="animate-enter bg-white rounded-3xl shadow-sm p-5 text-center border border-slate-100 interactive-card">
+        <div class="text-3xl font-extrabold text-transparent bg-clip-text ${gradient}" id="${id}">-</div>
+        <p class="text-xs text-slate-400 mt-2 uppercase">${label}</p>
+    </div>
+`;
+
+function renderStatsGrid() {
+    const stats = [
+        { id: 'total-month', label: 'เวรเดือนนี้', gradient: 'bg-gradient-to-br from-indigo-500 to-indigo-700' },
+        { id: 'total-week', label: 'เวรสัปดาห์นี้', gradient: 'bg-gradient-to-br from-blue-400 to-blue-600' },
+        { id: 'pending-exchange', label: 'รอแลกเปลี่ยน', gradient: 'bg-gradient-to-br from-amber-400 to-orange-500' },
+        { id: 'pending-trade', label: 'รออนุมัติขาย', gradient: 'bg-gradient-to-br from-rose-400 to-red-600' }
+    ];
+    document.getElementById('stats-grid').innerHTML = stats.map(StatCard).join('');
+}
+
+// --- API FUNCTIONS ---
+
+async function loadDashboardData() {
+    const user = JSON.parse(localStorage.getItem('user'));
+    const token = localStorage.getItem('authToken');
+
+    try {
+        const res = await fetch(`${API_BASE}/api/dashboard-summary`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId: user.UserID })
+        });
+
+        if (res.status === 401) {
+            console.error("Token expired");
+            window.location.href = 'login.html';
+            return;
+        }
+
+        const data = await res.json();
+        
+        if (data.success) {
+            // Update ตัวเลขสถิติ
+            ['totalMonth', 'totalWeek', 'pendingExchange', 'pendingTrade'].forEach(k => {
+                const el = document.getElementById(k.replace(/([A-Z])/g, '-$1').toLowerCase());
+                if(el) el.innerText = data.stats[k];
+            });
+
+            // Update การ์ดเวร
+            const container = document.getElementById('upcoming-shift-container');
+            if (data.upcomingShifts?.length) {
+                container.innerHTML = data.upcomingShifts.map((s, i) => ShiftCard(s, i)).join('');
+            } else {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">ไม่มีเวรเร็วๆ นี้</div>`;
+            }
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function checkConstraintWindow() {
+    const token = localStorage.getItem('authToken');
+    try {
+        const res = await fetch(`${API_BASE}/api/check-constraint-window`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (res.status === 401) return;
+
+        const data = await res.json();
+        const btn = document.getElementById('constraintBtn');
+        if (data.isOpen) btn.classList.remove('hidden');
+    } catch {}
+}
+</script>
+
+</body>
+</html>

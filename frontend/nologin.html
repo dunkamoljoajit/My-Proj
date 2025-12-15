@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AUTONURSESHIFT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* --- 1. Reset & Base Styles --- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: "Prompt", sans-serif;
+    }
+
+    body {
+      /* ใช้สีฟ้าอ่อนเป็นพื้นหลังกันพลาด */
+      background-color: #eaf4ff;
+      color: #1e2a78;
+      overflow-x: hidden; /* ป้องกันเลื่อนซ้ายขวา */
+    }
+
+    /* --- 2. Navbar (แถบเมนู) --- */
+    .navbar {
+      display: flex;
+      justify-content: space-between; /* ดันซ้าย-ขวา */
+      align-items: center;
+      padding: 15px 20px;
+      background-color: #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05); /* เพิ่มเงาบางๆ ให้ดูมีมิติ */
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 70px; /* กำหนดความสูงแน่นอน */
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .logo-img {
+       width: 40px;
+       height: 40px;
+       object-fit: contain; 
+    }
+
+    .logo-text {
+      font-size: 1.2rem; /* ขนาดกำลังดีบนมือถือ */
+      font-weight: 700;
+      color: #1e2a78;
+    }
+
+    .menu-group {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* ลิงก์เมนู (ซ่อนบนมือถือ) */
+    .nav-link {
+      text-decoration: none;
+      color: #555;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: color 0.3s;
+    }
+    .nav-link:hover { color: #1e2a78; }
+
+    /* ปุ่ม Login */
+    .login-btn {
+      background-color: #1e2a78; /* สีน้ำเงินเข้ม ดูพรีเมียมกว่าสีฟ้าอ่อน */
+      color: #fff;
+      text-decoration: none;
+      border-radius: 50px;
+      padding: 8px 20px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(30, 42, 120, 0.2);
+    }
+
+    .login-btn:hover {
+      background-color: #2c2c94;
+      transform: translateY(-2px);
+    }
+
+    /* --- 3. Hero Section (ส่วนเนื้อหาหลัก) --- */
+    .hero {
+      /* ใช้ความสูงแบบเต็มจอ ลบความสูง navbar ออก */
+      height: calc(100vh - 70px); 
+      
+      /* ใส่รูปพื้นหลัง */
+      background: url("background03.png") no-repeat center bottom;
+      background-size: cover; /* ให้รูปขยายเต็มพื้นที่ */
+      
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* จัดกึ่งกลางแนวตั้ง */
+      align-items: center;      
+      text-align: center;
+      padding: 20px;
+      
+      /* ดันเนื้อหาขึ้นไปด้านบนนิดหน่อย ไม่ให้ทับกับลายกราฟิกด้านล่าง (ถ้ามี) */
+      padding-bottom: 100px; 
+    }
+
+    .hero-content h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 15px;
+      color: #1e2a78;
+    }
+
+    .hero-content p {
+      font-size: 1rem;
+      color: #5c6b8f;
+      font-weight: 400;
+      max-width: 300px; /* บีบข้อความไม่ให้ยาวเกินไปบนมือถือ */
+      margin: 0 auto;
+    }
+
+    /* --- 4. Responsive (จัดการการแสดงผล) --- */
+    
+    /* มือถือ (หน้าจอเล็กกว่า 768px) */
+    @media (max-width: 768px) {
+      .nav-link {
+        display: none;
+      }
+      
+      /* จัด Logo กับปุ่มให้อยู่ห่างกัน */
+      .navbar {
+        justify-content: space-between;
+      }
+    }
+
+    /* Tablet & Desktop (หน้าจอใหญ่กว่า 769px) */
+    @media (min-width: 769px) {
+      .hero-content h1 { font-size: 3rem; }
+      .hero-content p { font-size: 1.3rem; max-width: 600px; }
+      .logo-text { font-size: 1.5rem; }
+      .login-btn { padding: 10px 25px; font-size: 1rem; }
+    }
+      
+  </style>
+</head>
+<body>
+
+  <header class="navbar">
+    <a href="nologin.html" class="logo">
+      <img src="logo.png" alt="logo" class="logo-img">
+      <span class="logo-text">AUTONURSESHIFT</span>
+    </a>
+
+    <div class="menu-group">
+      <a href="sytemwork.html" class="nav-link">วิธีการใช้งาน</a>
+      <a href="system.html" class="nav-link">เกี่ยวกับระบบ</a>
+      
+      <a href="login.html" class="login-btn">เข้าสู่ระบบ</a> 
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>จัดเวรพยาบาล<br>อัตโนมัติในไม่กี่คลิก</h1>
+    </div>
+  </section>
+
+</body>
+</html>

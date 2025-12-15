@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTONURSESHIFT - รีเซ็ตรหัสผ่านสำเร็จ</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;700&family=Prompt:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <style>
+        /* =========================================
+           1. CORE STYLES & RESET
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            font-family: 'Kanit', sans-serif;
+            background-color: #f0f2f5; 
+        }
+
+        body {
+            background-image: url('background04.png'); 
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Animation Fade In (สำหรับทั้งหน้า) */
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; opacity: 0; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =========================================
+           2. COMPONENT STYLES (Logo & Success Box)
+           ========================================= */
+        
+        /* Logo Component Style */
+        .logo {
+            position: absolute; top: 30px; left: 40px;
+            font-family: "Prompt", sans-serif; font-weight: 700; color: #222; 
+            display: flex; align-items: center; gap: 8px; z-index: 10;
+        }
+        .logo-img { width: 60px; height: 60px; object-fit: contain; }
+        .logo-text { font-size: 1.5rem; font-weight: 600; color: #1e2a78; margin-left: -10px; }
+
+        /* Success Box Component Style */
+        .success-box {
+            background: #ffffff;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+            width: 100%;
+            max-width: 480px;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+        }
+
+        /* Icon Animation */
+        .success-icon {
+            font-size: 5rem; color: #28a745; margin-bottom: 1.5rem;
+            animation: popIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+
+        /* Typography */
+        .success-box h2 {
+            color: #191970; font-size: 2.2rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.2;
+        }
+        .text-wrapper { margin-bottom: 2.5rem; }
+        .sub-text {
+            font-size: 1rem; color: #777; line-height: 1.6; margin-bottom: 5px; display: block;
+        }
+
+        /* Button */
+        .goto-login-btn {
+            background-color: #191970; color: white; border: none; padding: 15px;
+            border-radius: 50px; font-size: 1.1rem; font-weight: 500;
+            font-family: 'Kanit', sans-serif; cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s;
+            text-decoration: none; width: 100%; display: inline-block;
+            box-shadow: 0 4px 15px rgba(25, 25, 112, 0.2);
+        }
+        .goto-login-btn:hover { background-color: #2c2c94; transform: translateY(-2px); }
+
+        /* =========================================
+           3. RESPONSIVE DESIGN
+           ========================================= */
+        @media (max-width: 820px) {
+            .logo { top: 20px; left: 30px; }
+            .success-box { padding: 2.5rem; }
+        }
+
+        @media (max-width: 576px) {
+            body { flex-direction: column; justify-content: center; padding-top: 60px; }
+            
+            /* Logo Center Logic */
+            .logo { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 100%; justify-content: center; margin-left: 0; }
+            .logo-center-mobile { /* Class helper if needed via JS */
+                position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+                width: 100%; justify-content: center; margin-left: 0;
+            }
+
+            .success-box { padding: 2rem 1.5rem; }
+            .success-icon { font-size: 4rem; }
+            .success-box h2 { font-size: 1.8rem; }
+            .goto-login-btn { padding: 14px; font-size: 1rem; }
+        }
+
+        @media (max-width: 375px) {
+            .logo-img { width: 40px; height: 40px; }
+            .logo-text { font-size: 1.2rem; }
+            .success-box { padding: 1.5rem; }
+            .success-box h2 { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header-container"></div>
+
+    <div id="content-container"></div>
+
+    <script src="components.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Render Logo
+            const headerContainer = document.getElementById('header-container');
+            headerContainer.innerHTML = LogoComponent();
+            
+            // เพิ่ม class จัดกึ่งกลางสำหรับมือถือ 
+            if(window.innerWidth <= 576) {
+                const logo = headerContainer.querySelector('.logo');
+                if(logo) logo.classList.add('logo-center-mobile');
+            }
+
+            // 2. Render Success Card
+            document.getElementById('content-container').innerHTML = SuccessCardComponent({
+                title: "รีเซ็ตรหัสผ่านสำเร็จ!",
+                message: [
+                    "รหัสผ่านถูกเปลี่ยนเรียบร้อยแล้ว",
+                    "กรุณาเข้าสู่ระบบเพื่อเริ่มใช้งาน"
+                ],
+                btnText: "ไปที่หน้าเข้าสู่ระบบ",
+                btnLink: "login.html"
+            });
+        });
+    </script>
+</body>
+</html>
