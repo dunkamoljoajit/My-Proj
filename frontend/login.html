@@ -8,8 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;700&family=Prompt:wght@700&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
 
     <style>
         /* --- การตั้งค่าทั่วไป --- */
@@ -33,7 +32,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            padding: 2rem; /* (เพิ่ม padding เผื่อจอเล็ก) */
+            padding: 2rem; 
         }
 
         /* --- โลโก้ที่มุมซ้ายบน --- */
@@ -97,7 +96,7 @@
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
             width: 450px;
-            max-width: 100%; /* (ใช้ 100% แทน 90%) */
+            max-width: 100%; 
             text-align: center;
         }
 
@@ -131,7 +130,6 @@
             outline: none; 
         }
         
-        /* (เพิ่ม) ปรับ padding-right ให้ช่อง password เพื่อไม่ให้ทับไอคอนตา */
         .input-group input#password {
              padding-right: 60px;
         }
@@ -150,7 +148,7 @@
             font-size: 1.1rem;
         }
 
-        /* (เพิ่ม) ไอคอนด้านขวา (รูปตา) */
+        /* ไอคอนด้านขวา (รูปตา) */
         .input-group .icon-right-toggle {
             position: absolute;
             right: 25px;
@@ -213,7 +211,7 @@
             text-decoration: underline;
         }
     
-        /* --- (เพิ่ม) Toast Alert (จากไฟล์ที่แล้ว) --- */
+        /* --- Toast Alert --- */
         .toast {
             visibility: hidden;
             min-width: 250px;
@@ -245,7 +243,7 @@
             }
             
             .logo-text {
-                font-size: 1.0rem; /* แก้ไขจาก display เป็น font-size */
+                font-size: 1.0rem; 
             }
 
             .logo-img {
@@ -275,7 +273,7 @@
             }
 
             .logo {
-                top: 10px; /* ปรับ logo ให้เลื่อนขึ้น */
+                top: 10px; 
             }
 
             .home-button {
@@ -304,7 +302,7 @@
             
             <div class="input-group">
                 <i class="fas fa-envelope icon-left"></i>
-                <input type_email="email" placeholder="E-mail" id="email" required>
+                <input type="email" placeholder="E-mail" id="email" required>
             </div>
             
             <div class="input-group">
@@ -394,20 +392,17 @@
                     if (response.ok) {
                         const user = data.user;
 
-                        // ============================================
-                        // ✅ FIX: บันทึก Token ลง LocalStorage
-                        // ============================================
+                        // บันทึก Token ลง LocalStorage
                         if (data.token) {
                             localStorage.setItem('authToken', data.token);
                         } else {
                             console.warn("Backend ไม่ได้ส่ง token กลับมา");
                         }
-                        // ============================================
 
-                        // ✅ 1. เก็บข้อมูลแบบ Object (ตามโค้ดเดิม)
+                        // เก็บข้อมูลแบบ Object
                         localStorage.setItem('user', JSON.stringify(user));
 
-                        // ✅ 2. เก็บข้อมูลแยก key (เพื่อให้หน้า "ตลาดขายเวร" ใช้งานได้)
+                        // เก็บข้อมูลแยก key
                         localStorage.setItem('userId', user.UserID);      
                         localStorage.setItem('userName', user.FirstName);
                         localStorage.setItem('userRole', user.RoleID);
@@ -421,9 +416,7 @@
                             } else if (user.RoleID === 2) {
                                 window.location.href = 'dashboard.html'; 
                             }  else {
-                                // กรณี RoleID เป็นค่าอื่นๆ ที่ระบบยังไม่รองรับ
                                 showToast('บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบนี้', false);
-                                // และอาจจะลบ localStorage ทิ้ง เพื่อให้เขา Login ใหม่
                                 localStorage.clear();
                             }
                         }, 1000);
