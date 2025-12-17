@@ -102,7 +102,15 @@ document.addEventListener('DOMContentLoaded', () => {
     renderStatsGrid();
     loadDashboardData();
     checkConstraintWindow();
+    const constraintBtn = document.getElementById('constraintBtn');
+    if (constraintBtn) {
+        constraintBtn.addEventListener('click', () => {
+            // สมมติชื่อหน้าตั้งค่าข้อจำกัดคือ 'constraint_settings.html'
+            window.location.href = 'constraint_settings.html'; 
+        });
+    }
 });
+
 
 // --- HELPER COMPONENTS ---
 

@@ -98,16 +98,21 @@ customElements.define('app-layout', AppLayout);
 
 
 // --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
+// =========================================================
+// 2. WEB COMPONENTS (Smart Components)
+// =========================================================
+
 // --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
 class AppHeader extends HTMLElement {
 
     connectedCallback() {
-        const user = getUser();
+        // ต้องตรวจสอบให้แน่ใจว่าฟังก์ชัน getUser() มีอยู่
+        const user = getUser(); 
         if (!user) return;
 
         const isHead = user.RoleID === 1;
 
-        // **Theme Config:** (ยังคงเดิม)
+        // 1. Theme Config
         const theme = isHead
             ? {
                 // Config สำหรับ Head Nurse (Role 1)
@@ -119,27 +124,27 @@ class AppHeader extends HTMLElement {
                 statusColor: 'text-emerald-500',
                 headerBorder: 'border-t-4 border-violet-600',
                 userIcon: 'fa-user-md',
-                subDate: ''
             }
             : {
                 // Config สำหรับ Nurse (Role 2)
                 bgIcon: 'bg-indigo-600',
                 shadow: 'shadow-indigo-200',
-                title: `สวัสดี ${user.FirstName}`,
-                sub: moment().locale('th').format('D MMMM YYYY'),
+                title: `สวัสดี ${user.FirstName}`, 
+                sub: typeof moment !== 'undefined' ? moment().locale('th').format('D MMMM YYYY') : 'วันที่ปัจจุบัน',
                 homeLink: 'dashboard.html',
                 statusColor: 'text-emerald-500',
                 headerBorder: 'border-t-4 border-indigo-600',
                 userIcon: 'fa-user-nurse',
-                subDate: ''
             };
 
-        // วันที่สำหรับ Head Nurse (เฉพาะเนื้อหา p tag)
+        // 2. วันที่สำหรับ Head Nurse
         const dateDisplayHtml = isHead 
-            ? `<p class="text-xs text-slate-400 mt-1" id="header-date">...</p>` 
+            ? `<div class="hidden sm:block text-right">
+                <p class="text-xs text-slate-400 mt-1" id="header-date">...</p>
+               </div>` 
             : '';
 
-        // Render HTML
+        // 3. Render HTML
         this.innerHTML = `
         <header class="bg-white sticky top-0 z-50 shadow-sm ${theme.headerBorder} transition-all duration-300">
             <div class="max-w-screen-md mx-auto px-4 py-3 flex justify-between items-center">
@@ -157,21 +162,19 @@ class AppHeader extends HTMLElement {
                     
                     <div id="right-elements-wrapper" class="flex items-center gap-4">
                         
-                        <div class="hidden sm:block text-right">
-                            ${dateDisplayHtml}
-                        </div>
+                        ${dateDisplayHtml}
 
-                        <div id="profile-menu-trigger" class="relative flex items-center gap-3 cursor-pointer bg-white hover:bg-slate-50 px-1 py-1 rounded-full border border-slate-100 shadow-sm transition-all select-none pr-4">
+                        <div id="profile-menu-trigger" class="relative z-10 flex items-center gap-3 cursor-pointer bg-white hover:bg-slate-50 px-1 py-1 rounded-full border border-slate-100 shadow-sm transition-all select-none pr-4">
                             <img id="header-avatar" class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" src="${getProfileImageUrl(user.ProfileImage)}" onerror="this.src='https://placehold.co/100?text=User'">
                             
                             <div class="text-right hidden sm:block">
                                 <p class="text-xs font-bold text-slate-700 leading-none">${user.FirstName} ${user.LastName}</p>
                                 <p class="text-[9px] ${theme.statusColor} font-bold mt-0.5">● Online</p>
                             </div>
-                            </div>
+                        </div>
 
                     </div>
-                    </div>
+                </div>
             </div>
         </header>`;
 
@@ -191,14 +194,17 @@ class AppHeader extends HTMLElement {
             }
         }
 
-        // 2. สร้าง Dropdown Menu แบบ Dynamic
+        // 2. สร้าง Dropdown Menu แบบ Dynamic (ใช้ FIXED POSITION)
         const trigger = this.querySelector('#profile-menu-trigger');
         if(trigger) {
-            if (!trigger.querySelector('#custom-dropdown')) {
-                
-                // *** Dropdown HTML: ไม่มี Header และใช้ positioning ที่มั่นคง ***
+            let dropdown = document.getElementById('global-custom-dropdown');
+
+            // แก้ไขส่วนสร้าง Dropdown
+            if (!dropdown) {
                 const dropdownHtml = `
-                <div id="custom-dropdown" class="hidden absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[60] origin-top-right transition-all duration-200">
+                <div id="global-custom-dropdown" 
+                    class="hidden fixed w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 origin-top-right transition-all duration-200"
+                    style="z-index: 999999 !important;"> 
                     
                     <a href="profile-edit.html" class="flex items-center px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors">
                         <i class="fas fa-user-edit w-5 mr-2 text-indigo-500 opacity-80"></i> แก้ไขโปรไฟล์
@@ -208,33 +214,56 @@ class AppHeader extends HTMLElement {
                         <i class="fas fa-sign-out-alt w-5 mr-2 opacity-80"></i> ออกจากระบบ
                     </button>
                 </div>`;
-                trigger.insertAdjacentHTML('beforeend', dropdownHtml);
+                
+                // เปลี่ยนมาวางไว้หน้าสุดของ body เพื่อเลี่ยงการโดน element อื่นในลำดับท้ายๆ ทับ
+                document.body.insertAdjacentHTML('afterbegin', dropdownHtml);
+                dropdown = document.getElementById('global-custom-dropdown');
             }
 
-            const dropdown = trigger.querySelector('#custom-dropdown');
             
-            // Event Listener (ยังคงเดิม)
-            trigger.addEventListener('click', (e) => {
+            // 2.2 Event Listener: คำนวณตำแหน่งด้วย JS ทุกครั้งที่คลิก (ใช้ Fixed)
+           trigger.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const triggerRect = trigger.getBoundingClientRect();
+                
+                dropdown.style.top = `${triggerRect.bottom + 10}px`; 
+                dropdown.style.right = `${window.innerWidth - triggerRect.right}px`;
+                
+                // บังคับผ่าน JS เมื่อกดเปิด
+                dropdown.style.zIndex = "999999";
+                dropdown.style.display = dropdown.classList.contains('hidden') ? 'block' : 'none';
+                
                 dropdown.classList.toggle('hidden');
             });
 
+            // 2.3 Event Listener สำหรับการคลิกนอก Dropdown (เพื่อปิด)
             document.addEventListener('click', (e) => {
-                if (!trigger.contains(e.target)) dropdown.classList.add('hidden');
+                // ตรวจสอบทั้ง Trigger และ Dropdown
+                if (dropdown && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
             });
 
-            const logoutBtn = trigger.querySelector('#header-logout-btn');
+            // 2.4 Event Listener สำหรับปุ่ม Logout
+            const logoutBtn = dropdown.querySelector('#header-logout-btn');
             if(logoutBtn) {
                 logoutBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    logout();
+                    if (typeof logout === 'function') {
+                        logout();
+                    } else {
+                        console.error('Logout function is not defined.');
+                    }
                 });
             }
         }
     }
 }
 
-customElements.define('app-header', AppHeader);
+// *** การลงทะเบียน Custom Element (ต้องอยู่ท้ายสุดของโค้ดคลาส) ***
+if (!customElements.get('app-header')) {
+    customElements.define('app-header', AppHeader);
+}
 
 // --- App Navbar (เมนูล่าง - เปลี่ยนรายการเมนูตาม Role) ---
 class AppNavbar extends HTMLElement {
