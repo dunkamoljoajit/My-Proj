@@ -4,266 +4,284 @@
 const API_BASE = 'http://localhost:3000'; 
 
 // ฟังก์ชันช่วยดึงข้อมูลผู้ใช้และ Token
-const getUser = () => {
-    try {
-        const userStr = localStorage.getItem('user');
-        return userStr ? JSON.parse(userStr) : null;
-    } catch (e) {
-        console.error("Error parsing user data:", e);
-        return null;
-    }
-};
+// components.js (ฉบับแก้ไข: บังคับแสดงสีโลโก้หัวหน้าพยาบาล)
 
-const getToken = () => localStorage.getItem('authToken');
-
-// ฟังก์ชันจัดการ URL รูปภาพ (รองรับทั้ง Local และ Cloudinary)
-const getProfileImageUrl = (imagePath) => {
-    if (!imagePath) return 'https://placehold.co/100?text=User';
-    // ถ้าเป็น Link เต็มๆ (http...) ให้ใช้เลย, ถ้าไม่ ให้ต่อ Path ของ Local
-    return imagePath.startsWith('http') ? imagePath : `${API_BASE}/uploads/${imagePath}`;
-};
-
-// ฟังก์ชัน Logout กลาง (ใช้ร่วมกันทุกหน้า)
-const logout = () => {
-    const confirmLogout = async () => {
-        const user = getUser();
-        const token = getToken();
-
-        if (user && user.UserID) {
-            try {
-                await fetch(`${API_BASE}/api/logout`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` 
-                    },
-                    body: JSON.stringify({ userId: user.UserID })
-                });
-            } catch (err) {
-                console.error("Logout API Error:", err);
-            }
-        }
-        localStorage.clear();
-        window.location.href = 'login.html';
-    };
-
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: 'ออกจากระบบ?',
-            text: 'คุณต้องการออกจากระบบใช่หรือไม่',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#ef4444',
-            cancelButtonColor: '#94a3b8',
-            confirmButtonText: 'ใช่, ออก',
-            cancelButtonText: 'ยกเลิก',
-            customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-xl', cancelButton: 'rounded-xl' }
-        }).then((result) => { if (result.isConfirmed) confirmLogout(); });
-    } else {
-        if (confirm("คุณต้องการออกจากระบบใช่หรือไม่?")) confirmLogout();
-    }
-};
-
-
-// =========================================================
-// 2. WEB COMPONENTS (Smart Components)
-// =========================================================
-
-// --- App Layout (โครงสร้างหลัก) ---
-class AppLayout extends HTMLElement {
-    connectedCallback() {
-        // เพิ่ม Font อัตโนมัติถ้ายังไม่มี
-        if (!document.getElementById('app-fonts')) {
-            const fontLink = document.createElement('link');
-            fontLink.id = 'app-fonts';
-            fontLink.rel = 'stylesheet';
-            fontLink.href = 'https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700&display=swap';
-            document.head.appendChild(fontLink);
-        }
-
-        const content = this.innerHTML;
-        this.className = "flex flex-col min-h-screen text-slate-800 antialiased font-sans bg-[#f0fdfa]"; // สีพื้นหลังเริ่มต้น
-        
-        // Render โครงสร้าง: Header -> Main Content -> Navbar
-        this.innerHTML = `
-            <app-header></app-header>
-            <main class="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 pb-32 overflow-y-auto scroll-smooth">
-                ${content}
-            </main>
-            <app-navbar></app-navbar>
-        `;
-    }
+function getUser() {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
 }
-customElements.define('app-layout', AppLayout);
 
+function getProfileImageUrl(path) {
+    if (!path) return 'https://placehold.co/100?text=User';
+    // ตรวจสอบ path ว่ามี http หรือไม่ ถ้าไม่มีให้เติม path ของ server
+    const API_BASE = 'http://localhost:3000'; 
+    return path.startsWith('http') ? path : `${API_BASE}/uploads/${path}`;
+}
 
-// --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
-// =========================================================
-// 2. WEB COMPONENTS (Smart Components)
-// =========================================================
+async function logout() {
+    const user = getUser(); // 1. ดึงข้อมูลผู้ใช้มาก่อนที่จะลบทิ้ง เพื่อเอา UserID
+    const token = localStorage.getItem('authToken');
 
-// --- App Header (หัวเว็บ - เปลี่ยนสี/ข้อความตาม Role) ---
+    if (user && user.UserID) {
+        try {
+            // 2. ยิง API ไปบอก Server ว่า User คนนี้ Logout แล้ว
+            await fetch(`${API_BASE}/logout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId: user.UserID })
+            });
+        } catch (err) {
+            console.error("Logout API Error:", err);
+            // ต่อให้ API Error ก็ต้องยอมให้ Logout ได้ เพื่อไม่ให้ user ติดอยู่ในระบบ
+        }
+    }
+
+    // 3. ลบข้อมูลใน LocalStorage (เหมือนเดิม)
+    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+
+    // 4. Redirect ไปหน้า Login
+    window.location.href = 'login.html';
+}
+// --- App Header (เมนูบน - แบบมี Dropdown แจ้งเตือนสวยๆ) ---
 class AppHeader extends HTMLElement {
-
     connectedCallback() {
-        // ต้องตรวจสอบให้แน่ใจว่าฟังก์ชัน getUser() มีอยู่
         const user = getUser(); 
         if (!user) return;
 
         const isHead = user.RoleID === 1;
 
-        // 1. Theme Config
+        // Config Theme
         const theme = isHead
             ? {
-                // Config สำหรับ Head Nurse (Role 1)
-                bgIcon: 'bg-violet-600',
-                shadow: 'shadow-violet-200',
+                hexColor: '#7c3aed',
+                iconBg: '#7c3aed',
                 title: 'HEAD NURSE',
                 sub: 'ADMINISTRATION',
                 homeLink: 'Headnurse_dashboard.html',
-                statusColor: 'text-emerald-500',
-                headerBorder: 'border-t-4 border-violet-600',
+                notiLink: 'Admin_Approvals.html',
                 userIcon: 'fa-user-md',
             }
             : {
-                // Config สำหรับ Nurse (Role 2)
-                bgIcon: 'bg-indigo-600',
-                shadow: 'shadow-indigo-200',
+                hexColor: '#4f46e5',
+                iconBg: '#4f46e5',
                 title: `สวัสดี ${user.FirstName}`, 
-                sub: typeof moment !== 'undefined' ? moment().locale('th').format('D MMMM YYYY') : 'วันที่ปัจจุบัน',
+                sub: 'NURSE SYSTEM',
                 homeLink: 'dashboard.html',
-                statusColor: 'text-emerald-500',
-                headerBorder: 'border-t-4 border-indigo-600',
+                notiLink: 'notifications.html', 
                 userIcon: 'fa-user-nurse',
             };
 
-        // 2. วันที่สำหรับ Head Nurse
-        const dateDisplayHtml = isHead 
-            ? `<div class="hidden sm:block text-right">
-                <p class="text-xs text-slate-400 mt-1" id="header-date">...</p>
-               </div>` 
-            : '';
-
-        // 3. Render HTML
         this.innerHTML = `
-        <header class="bg-white sticky top-0 z-50 shadow-sm ${theme.headerBorder} transition-all duration-300">
-            <div class="max-w-screen-md mx-auto px-4 py-3 flex justify-between items-center">
+        <header class="bg-white sticky top-0 w-full shadow-sm" style="z-index: 2000 !important; border-top: 4px solid ${theme.hexColor};">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center relative">
                 
-                <a href="${theme.homeLink}" class="flex items-center gap-3 group">
-                    <div class="w-10 h-10 ${theme.bgIcon} rounded-xl flex items-center justify-center text-white shadow-md ${theme.shadow} transition-transform group-hover:scale-105">
-                        <i class="fas ${theme.userIcon} text-lg"></i> </div>
-                    <div>
-                        <h1 class="text-lg font-bold text-slate-800 leading-none">${theme.title}</h1>
-                        <p class="text-[10px] text-slate-400 font-medium tracking-wide mt-0.5 uppercase">${theme.sub}</p>
+                <a href="${theme.homeLink}" class="flex items-center gap-3 shrink-0">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md transition-transform hover:scale-105"
+                         style="background-color: ${theme.iconBg};">
+                        <i class="fas ${theme.userIcon} text-lg"></i> 
+                    </div>
+                    <div class="flex flex-col">
+                        <h1 class="text-sm sm:text-lg font-bold text-slate-800 leading-none">${theme.title}</h1>
+                        <p class="text-[9px] text-slate-400 font-medium tracking-wide mt-1 uppercase">${theme.sub}</p>
                     </div>
                 </a>
 
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3 sm:gap-5 shrink-0">
                     
-                    <div id="right-elements-wrapper" class="flex items-center gap-4">
-                        
-                        ${dateDisplayHtml}
-
-                        <div id="profile-menu-trigger" class="relative z-10 flex items-center gap-3 cursor-pointer bg-white hover:bg-slate-50 px-1 py-1 rounded-full border border-slate-100 shadow-sm transition-all select-none pr-4">
-                            <img id="header-avatar" class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" src="${getProfileImageUrl(user.ProfileImage)}" onerror="this.src='https://placehold.co/100?text=User'">
+                    <div class="relative inline-block">
+                        <button id="noti-trigger" class="relative p-2 rounded-full hover:bg-slate-50 transition-all group focus:outline-none">
+                            <i class="fas fa-bell text-2xl text-slate-400 transition-colors group-hover:text-indigo-500"></i>
                             
-                            <div class="text-right hidden sm:block">
-                                <p class="text-xs font-bold text-slate-700 leading-none">${user.FirstName} ${user.LastName}</p>
-                                <p class="text-[9px] ${theme.statusColor} font-bold mt-0.5">● Online</p>
-                            </div>
-                        </div>
+                            <span id="unread-count" class="hidden absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                0
+                            </span>
+                        </button>
 
+                        <div id="noti-dropdown" 
+                             class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[92vw] sm:w-80 max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden origin-top transition-all duration-200" 
+                             style="z-index: 2001;">
+                            
+                            <div class="px-4 py-3 border-b border-slate-50 bg-slate-50 flex justify-between items-center">
+                                <h3 class="text-sm font-bold text-slate-700">การแจ้งเตือน</h3>
+                                <span class="text-[10px] text-slate-400">ล่าสุด</span>
+                            </div>
+                            
+                            <div id="noti-list" class="max-h-80 overflow-y-auto custom-scrollbar">
+                                <div class="p-4 text-center text-xs text-gray-400">กำลังโหลด...</div>
+                            </div>
+                            
+                            <a href="${theme.notiLink}" class="block bg-slate-50 py-3 text-center text-xs font-bold text-indigo-500 hover:text-indigo-600 hover:bg-slate-100 border-t border-slate-100 transition-colors">
+                                ดูทั้งหมด
+                            </a>
+                        </div>
                     </div>
+
+                    <div id="profile-menu-trigger" class="relative flex items-center gap-2 cursor-pointer bg-white hover:bg-slate-50 py-1 pl-1 pr-3 rounded-full border border-slate-200 shadow-sm transition-all min-w-fit">
+                        <img id="header-avatar" 
+                             class="w-8 h-8 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" 
+                             src="${getProfileImageUrl(user.ProfileImage)}" 
+                             onerror="this.src='https://placehold.co/100?text=User'">
+                        
+                        <div class="flex flex-col items-start leading-tight">
+                            <span class="text-[11px] font-medium text-slate-600 truncate max-w-[80px]">${user.FirstName}</span>
+                            <span class="text-[7px] text-emerald-500 font-normal flex items-center gap-1 mt-0.5 tracking-tighter">
+                                <span class="w-1 h-1 bg-emerald-400 rounded-full animate-pulse opacity-80"></span>
+                                ONLINE
+                            </span>
+                        </div>
+                        <i class="fas fa-chevron-down text-[7px] text-slate-400 ml-0.5 shrink-0"></i>
+                    </div>
+
                 </div>
             </div>
         </header>`;
-
-        this.setupLogic(user, isHead);
+        this.setupProfileLogic(user);
+        this.setupNotiLogic(user);
+        this.fetchBadgeCount(user);
     }
 
-    setupLogic(user, isHead) {
-        // 1. ตั้งค่าวันที่ (ยังคงเดิม)
-        if(isHead) {
-            const dateEl = this.querySelector('#header-date');
-            if(dateEl) {
-                if(typeof moment !== 'undefined') {
-                    dateEl.innerText = moment().locale('th').format('วันddddที่ D MMMM YYYY');
-                } else {
-                    dateEl.innerText = new Date().toLocaleDateString('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-                }
+    setupNotiLogic(user) {
+        const trigger = this.querySelector('#noti-trigger');
+        const dropdown = this.querySelector('#noti-dropdown');
+        const listContainer = this.querySelector('#noti-list');
+
+        trigger.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const profileDropdown = document.getElementById('global-custom-dropdown');
+            if(profileDropdown) profileDropdown.classList.add('hidden');
+
+            dropdown.classList.toggle('hidden');
+
+            if (!dropdown.classList.contains('hidden')) {
+                await this.loadNotificationsInDropdown(user, listContainer);
             }
-        }
+        });
 
-        // 2. สร้าง Dropdown Menu แบบ Dynamic (ใช้ FIXED POSITION)
-        const trigger = this.querySelector('#profile-menu-trigger');
-        if(trigger) {
-            let dropdown = document.getElementById('global-custom-dropdown');
-
-            // แก้ไขส่วนสร้าง Dropdown
-            if (!dropdown) {
-                const dropdownHtml = `
-                <div id="global-custom-dropdown" 
-                    class="hidden fixed w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 origin-top-right transition-all duration-200"
-                    style="z-index: 999999 !important;"> 
-                    
-                    <a href="profile-edit.html" class="flex items-center px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors">
-                        <i class="fas fa-user-edit w-5 mr-2 text-indigo-500 opacity-80"></i> แก้ไขโปรไฟล์
-                    </a>
-                    <div class="border-t border-slate-100 my-1"></div>
-                    <button id="header-logout-btn" class="w-full text-left flex items-center px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors">
-                        <i class="fas fa-sign-out-alt w-5 mr-2 opacity-80"></i> ออกจากระบบ
-                    </button>
-                </div>`;
-                
-                // เปลี่ยนมาวางไว้หน้าสุดของ body เพื่อเลี่ยงการโดน element อื่นในลำดับท้ายๆ ทับ
-                document.body.insertAdjacentHTML('afterbegin', dropdownHtml);
-                dropdown = document.getElementById('global-custom-dropdown');
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+                dropdown.classList.add('hidden');
             }
+        });
+    }
 
+    async loadNotificationsInDropdown(user, container) {
+        try {
+            const token = localStorage.getItem('authToken');
+            const res = await fetch(`${API_BASE}/api/notifications/all/${user.UserID}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             
-            // 2.2 Event Listener: คำนวณตำแหน่งด้วย JS ทุกครั้งที่คลิก (ใช้ Fixed)
-           trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const triggerRect = trigger.getBoundingClientRect();
-                
-                dropdown.style.top = `${triggerRect.bottom + 10}px`; 
-                dropdown.style.right = `${window.innerWidth - triggerRect.right}px`;
-                
-                // บังคับผ่าน JS เมื่อกดเปิด
-                dropdown.style.zIndex = "999999";
-                dropdown.style.display = dropdown.classList.contains('hidden') ? 'block' : 'none';
-                
-                dropdown.classList.toggle('hidden');
-            });
+            if (!res.ok) throw new Error("Load failed");
+            const data = await res.json();
 
-            // 2.3 Event Listener สำหรับการคลิกนอก Dropdown (เพื่อปิด)
-            document.addEventListener('click', (e) => {
-                // ตรวจสอบทั้ง Trigger และ Dropdown
-                if (dropdown && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
-                    dropdown.classList.add('hidden');
-                }
-            });
+            container.innerHTML = ""; 
 
-            // 2.4 Event Listener สำหรับปุ่ม Logout
-            const logoutBtn = dropdown.querySelector('#header-logout-btn');
-            if(logoutBtn) {
-                logoutBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (typeof logout === 'function') {
-                        logout();
-                    } else {
-                        console.error('Logout function is not defined.');
-                    }
-                });
+            if (!data.success || data.notifications.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-slate-400 text-xs">ไม่มีการแจ้งเตือนใหม่</div>`;
+                return;
             }
+
+            data.notifications.slice(0, 5).forEach(noti => {
+                const timeAgo = new Date(noti.created_at).toLocaleString('th-TH', { 
+                    timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'
+                });
+                
+                const isSystem = noti.type === 'system';
+                const iconBg = isSystem ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500';
+
+                container.innerHTML += `
+                <div class="px-4 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors" onclick="window.location.href='notifications.html'">
+                    <div class="flex gap-3 items-start">
+                        <div class="w-8 h-8 rounded-full ${iconBg} flex items-center justify-center shrink-0 text-[10px]">
+                            <i class="fas ${isSystem ? 'fa-check' : 'fa-exchange-alt'}"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-center gap-2">
+                                <h4 class="text-xs font-bold text-slate-800 truncate">${isSystem ? noti.LastName : noti.FirstName}</h4>
+                                <span class="text-[9px] text-slate-400 whitespace-nowrap">${timeAgo}</span>
+                            </div>
+                            <p class="text-[10px] text-slate-500 truncate mt-0.5 font-light">${noti.info}</p>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        } catch (err) { container.innerHTML = '<div class="p-4 text-center text-xs text-red-400">เกิดข้อผิดพลาด</div>'; }
+    }
+
+    async fetchBadgeCount(user) {
+        try {
+            const token = localStorage.getItem('authToken');
+            const isHead = user.RoleID === 1;
+            const endpoint = isHead ? '/api/admin/pending-counts' : `/api/notifications/unread-count/${user.UserID}`;
+            
+            const res = await fetch(`${API_BASE}${endpoint}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (data.success) {
+                const badge = this.querySelector('#unread-count');
+                const count = isHead ? (data.total || 0) : (data.count || 0);
+                if (count > 0) {
+                    badge.innerText = count > 99 ? '99+' : count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        } catch (err) { console.error("Badge Error:", err); }
+    }
+
+    setupProfileLogic(user) {
+        const trigger = this.querySelector('#profile-menu-trigger');
+        let dropdown = document.getElementById('global-custom-dropdown');
+
+        if (!dropdown) {
+            const dropdownHtml = `
+            <div id="global-custom-dropdown" 
+                class="hidden fixed w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 origin-top-right transition-all duration-200"
+                style="z-index: 9999 !important;"> 
+                <a href="profile-edit.html" class="flex items-center px-4 py-2 text-[12px] text-slate-600 hover:bg-slate-50">
+                    <i class="fas fa-user-edit w-5 mr-2 text-indigo-500"></i> แก้ไขโปรไฟล์
+                </a>
+                <div class="border-t border-slate-100 my-1"></div>
+                <button id="header-logout-btn" class="w-full text-left flex items-center px-4 py-2 text-[12px] text-red-500 hover:bg-red-50">
+                    <i class="fas fa-sign-out-alt w-5 mr-2"></i> ออกจากระบบ
+                </button>
+            </div>`;
+            document.body.insertAdjacentHTML('afterbegin', dropdownHtml);
+            dropdown = document.getElementById('global-custom-dropdown');
         }
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const notiDropdown = this.querySelector('#noti-dropdown');
+            if(notiDropdown) notiDropdown.classList.add('hidden');
+
+            const triggerRect = trigger.getBoundingClientRect();
+            dropdown.style.top = `${triggerRect.bottom + 10}px`; 
+            dropdown.style.right = `${window.innerWidth - triggerRect.right}px`;
+            dropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', () => dropdown.classList.add('hidden'));
+
+        const logoutBtn = dropdown.querySelector('#header-logout-btn');
+        logoutBtn.onclick = () => logout();
     }
 }
 
-// *** การลงทะเบียน Custom Element (ต้องอยู่ท้ายสุดของโค้ดคลาส) ***
 if (!customElements.get('app-header')) {
     customElements.define('app-header', AppHeader);
 }
+// =========================================================
 
 // --- App Navbar (เมนูล่าง - เปลี่ยนรายการเมนูตาม Role) ---
 class AppNavbar extends HTMLElement {
@@ -288,6 +306,7 @@ class AppNavbar extends HTMLElement {
             { href: 'swap_request.html', icon: 'fa-exchange-alt', label: 'แลกเวร' },
             { href: 'trade_market.html', icon: 'fa-shopping-cart', label: 'ซื้อขาย' },
             { href: 'schedule.html', icon: 'fa-calendar-alt', label: 'ตารางเวร' },
+            { href: 'statistics.html', icon: 'fa-chart-bar', label: 'สถิติ' },
         ];
 
         const menus = isHead ? headMenus : nurseMenus;

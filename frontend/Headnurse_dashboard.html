@@ -76,37 +76,7 @@
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
 
-    <header class="bg-white sticky top-0 z-50 border-b border-gray-100 shadow-sm">
-        <div class="max-w-screen-md mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-violet-200">
-                    <i class="fas fa-user-md text-lg"></i>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold text-gray-800 leading-none">HEAD NURSE</h1>
-                    <p class="text-[10px] text-gray-400 font-medium tracking-wide mt-0.5">ADMINISTRATION</p>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <div class="hidden sm:block text-right">
-                    <p class="text-xs text-gray-400" id="current-date">...</p>
-                </div>
-
-                <div id="profile-menu-trigger" class="relative flex items-center gap-2 cursor-pointer bg-gray-50 hover:bg-gray-100 px-2 py-1.5 rounded-full border border-gray-100 transition select-none">
-                    <div id="admin-img-placeholder" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border border-white shadow-sm">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <img id="admin-img" crossorigin="anonymous" class="w-8 h-8 rounded-full object-cover border border-white shadow-sm hidden" src="" alt="Admin">
-                    
-                    <div class="pr-2 text-right hidden sm:block">
-                        <p class="text-xs font-bold text-gray-700 leading-none" id="admin-name">Loading...</p>
-                        <p class="text-[9px] text-emerald-500 font-bold mt-0.5">● Online</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </header>
+    <app-header></app-header>
 
     <main class="flex-1 overflow-y-auto bg-[#f8f9fa] pb-32">
         <div class="max-w-screen-md mx-auto p-4 space-y-6">
@@ -238,13 +208,13 @@
                     <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
                         <i class="fas fa-file-excel text-lg"></i>
                     </div>
-        <div>
-            <h4 class="text-sm font-bold text-gray-700 group-hover:text-green-700 transition-colors">นำเข้าข้อมูล (Excel)</h4>
-            <p class="text-[10px] text-gray-400">อัปโหลดไฟล์รายชื่อพยาบาล</p>
-        </div>
-    </div>
-    <i class="fas fa-chevron-right text-gray-300 group-hover:text-green-500 transition-colors"></i>
-</a>
+                    <div>
+                        <h4 class="text-sm font-bold text-gray-700 group-hover:text-green-700 transition-colors">นำเข้าข้อมูล (Excel)</h4>
+                        <p class="text-[10px] text-gray-400">อัปโหลดไฟล์รายชื่อพยาบาล</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-300 group-hover:text-green-500 transition-colors"></i>
+            </a>
             </div>
 
             <div id="generate-section">
@@ -293,8 +263,8 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             checkHeadNurseRole();
-            setupMenu();
-            updateDate();
+            // setupMenu(); // ❌ ลบออก เพราะ app-header จัดการแล้ว
+            // updateDate(); // ❌ ลบออก เพราะ app-header จัดการแล้ว
             setupCalendar();
             loadAllData();
         });
@@ -321,61 +291,21 @@
                 if (!userStr) throw new Error("No user found");
                 const user = JSON.parse(userStr);
                 if (user.RoleID !== 1) throw new Error("Unauthorized");
-                document.getElementById('admin-name').innerText = `${user.FirstName} ${user.LastName}`;
-                const imgPlaceholder = document.getElementById('admin-img-placeholder');
-                const imgEl = document.getElementById('admin-img');
-                if(user.ProfileImage) {
-                    const imgUrl = user.ProfileImage.startsWith('http') ? user.ProfileImage : `${API_URL}/uploads/${user.ProfileImage}`;
-                    imgEl.src = imgUrl;
-                    imgEl.classList.remove('hidden');
-                    imgPlaceholder.classList.add('hidden');
-                    imgEl.onerror = function() { 
-                        this.classList.add('hidden');
-                        imgPlaceholder.classList.remove('hidden');
-                    };
-                }
+                
+                // ❌ ส่วนนี้ลบออก เพราะ header จัดการแสดงผลข้อมูล User เองแล้ว
+                // document.getElementById('admin-name').innerText = `${user.FirstName} ${user.LastName}`;
+                // ... code เดิมที่จัดการรูปภาพ ...
             } catch (e) {
                 localStorage.clear();
                 window.location.href = 'login.html';
             }
         }
 
-        function setupMenu() {
-            const trigger = document.getElementById('profile-menu-trigger');
-            if(!trigger) return;
-            if(!trigger.querySelector('#custom-dropdown')) {
-                const html = `
-                <div id="custom-dropdown" class="hidden absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60] animate-fade-in-up origin-top-right">
-                    <a href="profile-edit.html" class="flex items-center px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 transition">
-                        <i class="fas fa-user-edit w-5 mr-2 text-violet-500"></i> แก้ไขโปรไฟล์
-                    </a>
-                    <div class="border-t border-gray-100 my-1"></div>
-                    <button id="custom-logout-btn" class="w-full text-left flex items-center px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition">
-                        <i class="fas fa-sign-out-alt w-5 mr-2"></i> ออกจากระบบ
-                    </button>
-                </div>`;
-                trigger.insertAdjacentHTML('beforeend', html);
-            }
-            const dropdown = document.getElementById('custom-dropdown');
-            trigger.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('hidden'); });
-            document.addEventListener('click', (e) => { if(!trigger.contains(e.target)) dropdown.classList.add('hidden'); });
-            document.getElementById('custom-logout-btn').addEventListener('click', async () => {
-                const user = JSON.parse(localStorage.getItem('user'));
-                if(user) await fetch(`${API_URL}/api/logout`, { method:'POST', headers:{'Content-Type':'application/json','Authorization': `Bearer ${localStorage.getItem('authToken')}`}, body:JSON.stringify({userId:user.UserID}) }).catch(()=>{});
-                localStorage.clear(); window.location.href='login.html';
-            });
-        }
-
-        function updateDate() {
-            const dateEl = document.getElementById('current-date');
-            if(dateEl) dateEl.innerText = new Date().toLocaleDateString('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-        }
-
         function setupCalendar() {
             flatpickr("#deadlineDate", { locale:"th", dateFormat:"Y-m-d", altInput:true, altFormat:"j F Y", disableMobile:true, appendTo:document.getElementById('date-container') });
         }
 
-       async function loadAllData() {
+        async function loadAllData() {
             const token = localStorage.getItem('authToken');
             const statusBarText = document.getElementById('status-bar-text');
 

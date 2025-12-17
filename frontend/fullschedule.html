@@ -321,39 +321,62 @@
         }
 
         function renderShifts(shifts) {
-            const groups = { 1: [], 2: [], 3: [] }; 
-            
-            // ✅ แก้ไข: เปลี่ยน s.ShiftID เป็น s.Shift_id (ตามชื่อฟิลด์ใน Database)
-            shifts.forEach(s => { 
-                if (groups[s.Shift_id]) groups[s.Shift_id].push(s); 
-            });
+        // 1. ประกาศ URL Backend ให้ชัดเจนตรงนี้ (กัน Error ว่าหาตัวแปรไม่เจอ)
+        const API_URL = 'http://localhost:3000'; 
 
-            const renderCard = (nurse, i) => `
-                <div class="glass-card p-3 rounded-2xl flex items-center gap-3 animate-item cursor-pointer hover:bg-white/40 transition" style="animation-delay: ${i*0.05}ms" onclick="openDetailSheet('${nurse.FirstName} ${nurse.LastName}', '${nurse.ShiftName}', '${nurse.StartTime}', '${nurse.EndTime}')">
-                    <img src="${nurse.ProfileImage ? API_BASE + '/uploads/' + nurse.ProfileImage : 'https://placehold.co/100'}" class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover bg-slate-200">
+        const groups = { 1: [], 2: [], 3: [] }; 
+        
+        // จัดกลุ่มตาม Shift_id
+        shifts.forEach(s => { 
+            if (groups[s.Shift_id]) groups[s.Shift_id].push(s); 
+        });
+
+        // ฟังก์ชันย่อยสำหรับสร้าง HTML การ์ดพยาบาลแต่ละคน
+        const renderCard = (nurse, i) => {
+            // 2. Logic คำนวณ Path รูปภาพให้ถูกต้อง
+            let imgSrc = 'https://placehold.co/100?text=Nurse'; // รูป Default
+            
+            if (nurse.ProfileImage) {
+                // ถ้าเป็น http (ลิงก์นอก) ให้ใช้เลย ถ้าไม่ใช่ให้ต่อ path ของ server
+                imgSrc = nurse.ProfileImage.startsWith('http') 
+                    ? nurse.ProfileImage 
+                    : `${API_URL}/uploads/${nurse.ProfileImage}`;
+            }
+
+            return `
+                <div class="glass-card p-3 rounded-2xl flex items-center gap-3 animate-item cursor-pointer hover:bg-white/40 transition" 
+                    style="animation-delay: ${i*0.05}ms" 
+                    onclick="openDetailSheet('${nurse.FirstName} ${nurse.LastName}', '${nurse.ShiftName}', '${nurse.StartTime}', '${nurse.EndTime}')">
+                    
+                    <img src="${imgSrc}" 
+                        onerror="this.onerror=null;this.src='https://placehold.co/100?text=No+Img';"
+                        class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover bg-slate-200">
+                    
                     <div>
                         <div class="font-bold text-slate-800 text-sm">${nurse.FirstName} ${nurse.LastName}</div>
                         <div class="text-[10px] text-slate-500 bg-white/50 px-2 py-0.5 rounded-md inline-block mt-0.5">พยาบาลวิชาชีพ</div>
                     </div>
                 </div>
             `;
+        };
 
-            if (groups[1].length) {
-                document.getElementById('section-morning').classList.remove('hidden');
-                document.getElementById('list-morning').innerHTML = groups[1].map(renderCard).join('');
-                document.getElementById('count-morning').innerText = groups[1].length;
-            }
-            if (groups[2].length) {
-                document.getElementById('section-afternoon').classList.remove('hidden');
-                document.getElementById('list-afternoon').innerHTML = groups[2].map(renderCard).join('');
-                document.getElementById('count-afternoon').innerText = groups[2].length;
-            }
-            if (groups[3].length) {
-                document.getElementById('section-night').classList.remove('hidden');
-                document.getElementById('list-night').innerHTML = groups[3].map(renderCard).join('');
-                document.getElementById('count-night').innerText = groups[3].length;
-            }
+        // แสดงผลลงในแต่ละ Section
+        if (groups[1].length) {
+            document.getElementById('section-morning').classList.remove('hidden');
+            document.getElementById('list-morning').innerHTML = groups[1].map(renderCard).join('');
+            document.getElementById('count-morning').innerText = groups[1].length;
         }
+        if (groups[2].length) {
+            document.getElementById('section-afternoon').classList.remove('hidden');
+            document.getElementById('list-afternoon').innerHTML = groups[2].map(renderCard).join('');
+            document.getElementById('count-afternoon').innerText = groups[2].length;
+        }
+        if (groups[3].length) {
+            document.getElementById('section-night').classList.remove('hidden');
+            document.getElementById('list-night').innerHTML = groups[3].map(renderCard).join('');
+            document.getElementById('count-night').innerText = groups[3].length;
+        }
+    }
 
         // --- DETAIL SHEET & MODAL FUNCTIONS ---
         function openDetailSheet(name, shiftName, start, end) {

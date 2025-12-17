@@ -16,6 +16,17 @@
     <script src="components.js"></script> 
     
     <style>
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #f0f4f8;
+            background-image: url('background06.png'); 
+            background-size: cover; 
+            background-position: center;
+            background-attachment: fixed;
+            -webkit-tap-highlight-color: transparent; 
+            color: #1e293b;
+            overscroll-behavior: none;
+        }
         .color-shift-a { color: #22c55e; font-weight: 600; }
         .color-shift-b { color: #f97316; font-weight: 600; }
         .color-shift-c { color: #3b82f6; font-weight: 600; }
@@ -29,6 +40,7 @@
 
 <body class="bg-slate-50 text-slate-800">
 
+    <app-header class="sticky top-0 z-30"></app-header>
     <app-layout>
         
         <div class="-mt-28 sm:-mt-10 relative z-0 w-full max-w-7xl mx-auto px-2 sm:px-6">
@@ -145,6 +157,8 @@
         </div> 
 
     </app-layout>
+    <app-navbar class="sticky top-0 z-30"></app-navbar>
+    
 
 <script>
     let currentFetchedData = null; 

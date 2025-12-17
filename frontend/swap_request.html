@@ -10,12 +10,13 @@
     <link rel="stylesheet" href="./lib/flatpickr.css">
     <script src="./lib/flatpickr.js"></script>
     <script src="./lib/th.js"></script>
+    
 
     <link rel="stylesheet" href="./lib/fontawesome/css/all.min.css">
     <link href="./style.css" rel="stylesheet">
-    <link href="./css/output.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/th.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
 
@@ -324,45 +325,59 @@
                     const today = moment().startOf('day');
 
                     container.innerHTML = data.results.map((item, i) => {
-                        const isPosted = item.ExchangePostID ? true : false;
-                        const borderClass = isPosted ? 'border-pink-300 ring-2 ring-pink-50' : 'border-slate-100';
-                        const badgeHtml = isPosted ? `<div class="absolute top-2 right-2 bg-pink-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm animate-pulse flex items-center gap-1"><i class="fas fa-bullhorn"></i> ประกาศแลก</div>` : '';
-                        
-                        const displayDate = moment(date).add(543, 'years').format('D MMM YY');
-                        const subText = isPosted && item.Message ? `"${item.Message}"` : `<i class="far fa-calendar-check"></i> ${displayDate}`;
+                    // -----------------------------------------------------------
+                    // 1. [ส่วนที่แก้] สร้างตัวแปรมาเช็ค URL รูปภาพ
+                    // -----------------------------------------------------------
+                    let profileSrc = 'https://placehold.co/100'; // รูป Default
 
-                        let isExpired = false;
-                        let expiredReason = "ผ่านเวลาแล้ว";
-                        const sName = item.ShiftName || "";
+                    if (item.ProfileImage) {
+                        if (item.ProfileImage.startsWith('http')) {
 
-                        if (targetDate.isBefore(today)) {
-                            isExpired = true; expiredReason = "วันที่ผ่านมาแล้ว";
-                        } else if (targetDate.isSame(today)) {
-                            if (item.ShiftID == 3 || sName.includes('ดึก')) { isExpired = true; expiredReason = "จบเวรแล้ว"; } 
-                            else if (item.ShiftID == 1 || sName.includes('เช้า')) { if (currentHour >= 8) { isExpired = true; expiredReason = "เข้าเวรแล้ว"; } } 
-                            else if (item.ShiftID == 2 || sName.includes('บ่าย')) { if (currentHour >= 16) { isExpired = true; expiredReason = "เริ่มเวรแล้ว"; } }
+                            profileSrc = item.ProfileImage;
                         }
+                    }
+                    // -----------------------------------------------------------
 
-                        let buttonHtml = '';
-                        if (isExpired) {
-                            buttonHtml = `<button disabled class="w-full mt-1 bg-slate-100 text-slate-400 text-xs font-bold py-3 rounded-xl cursor-not-allowed flex items-center justify-center gap-2 border border-slate-200 select-none"><i class="fas fa-ban"></i> <span>${expiredReason}</span></button>`;
-                        } else {
-                            buttonHtml = `<button onclick="openRequestModal('${item.UserID}', '${item.FirstName} ${item.LastName}', '${item.ScheduleID}')" class="btn-request-swap w-full mt-1 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold py-3 rounded-xl transition active:scale-95 flex items-center justify-center gap-2 group-hover:shadow-indigo-200 group-hover:shadow-lg"><span>ขอแลกเวรนี้</span> <i class="fas fa-arrow-right"></i></button>`;
-                        }
+                    const isPosted = item.ExchangePostID ? true : false;
+                    const borderClass = isPosted ? 'border-pink-300 ring-2 ring-pink-50' : 'border-slate-100';
+                    const badgeHtml = isPosted ? `<div class="absolute top-2 right-2 bg-pink-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm animate-pulse flex items-center gap-1"><i class="fas fa-bullhorn"></i> ประกาศแลก</div>` : '';
+                    
+                    const displayDate = moment(date).add(543, 'years').format('D MMM YY');
+                    const subText = isPosted && item.Message ? `"${item.Message}"` : `<i class="far fa-calendar-check"></i> ${displayDate}`;
 
-                        return `
-                        <div class="bg-white rounded-2xl p-4 shadow-sm border ${borderClass} flex flex-col items-start gap-3 hover:shadow-md transition animate-enter relative group" style="animation-delay:${i*0.05}s">
-                            ${badgeHtml}
-                            <div class="flex items-center gap-3 w-full border-b border-slate-50 pb-3">
-                                <img src="${item.ProfileImage ? API_BASE+'/uploads/'+item.ProfileImage : 'https://placehold.co/100'}" class="w-12 h-12 rounded-full border-2 border-slate-50 shadow-sm object-cover">
-                                <div>
-                                    <h4 class="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition">${item.FirstName} ${item.LastName}</h4>
-                                    <div class="text-xs text-slate-400 flex items-center gap-1 mt-0.5">${subText}</div>
-                                </div>
-                                <span class="ml-auto bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded-lg font-bold border border-indigo-100 whitespace-nowrap">${item.ShiftName}</span>
+                    let isExpired = false;
+                    let expiredReason = "ผ่านเวลาแล้ว";
+                    const sName = item.ShiftName || "";
+
+                    if (targetDate.isBefore(today)) {
+                        isExpired = true; expiredReason = "วันที่ผ่านมาแล้ว";
+                    } else if (targetDate.isSame(today)) {
+                        if (item.ShiftID == 3 || sName.includes('ดึก')) { isExpired = true; expiredReason = "จบเวรแล้ว"; } 
+                        else if (item.ShiftID == 1 || sName.includes('เช้า')) { if (currentHour >= 8) { isExpired = true; expiredReason = "เข้าเวรแล้ว"; } } 
+                        else if (item.ShiftID == 2 || sName.includes('บ่าย')) { if (currentHour >= 16) { isExpired = true; expiredReason = "เริ่มเวรแล้ว"; } }
+                    }
+
+                    let buttonHtml = '';
+                    if (isExpired) {
+                        buttonHtml = `<button disabled class="w-full mt-1 bg-slate-100 text-slate-400 text-xs font-bold py-3 rounded-xl cursor-not-allowed flex items-center justify-center gap-2 border border-slate-200 select-none"><i class="fas fa-ban"></i> <span>${expiredReason}</span></button>`;
+                    } else {
+                        buttonHtml = `<button onclick="openRequestModal('${item.UserID}', '${item.FirstName} ${item.LastName}', '${item.ScheduleID}')" class="btn-request-swap w-full mt-1 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold py-3 rounded-xl transition active:scale-95 flex items-center justify-center gap-2 group-hover:shadow-indigo-200 group-hover:shadow-lg"><span>ขอแลกเวรนี้</span> <i class="fas fa-arrow-right"></i></button>`;
+                    }
+
+                    return `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border ${borderClass} flex flex-col items-start gap-3 hover:shadow-md transition animate-enter relative group" style="animation-delay:${i*0.05}s">
+                        ${badgeHtml}
+                        <div class="flex items-center gap-3 w-full border-b border-slate-50 pb-3">
+                            <img src="${profileSrc}" class="w-12 h-12 rounded-full border-2 border-slate-50 shadow-sm object-cover">
+                            
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition">${item.FirstName} ${item.LastName}</h4>
+                                <div class="text-xs text-slate-400 flex items-center gap-1 mt-0.5">${subText}</div>
                             </div>
-                            ${buttonHtml}
+                            <span class="ml-auto bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded-lg font-bold border border-indigo-100 whitespace-nowrap">${item.ShiftName}</span>
                         </div>
+                        ${buttonHtml}
+                    </div>
                     `}).join('');
                 } else {
                     document.getElementById('result-count').innerText = "ไม่พบข้อมูล";
@@ -482,7 +497,7 @@
             const btn = document.getElementById('submit-request-btn');
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...'; btn.disabled = true;
             try {
-                const res = await fetch(`${API_BASE}/api/swaps/create`, { 
+                const res = await fetch(`${API_BASE}/api/swaps/send-request`, { 
                     method: 'POST', 
                     headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${token}`}, 
                     body: JSON.stringify({ requesterId: currentUser.UserID, targetUserId: document.getElementById('modal-target-user-id').value, requesterScheduleId: myScheduleId, targetScheduleId: targetScheduleId, reason: reason }) 

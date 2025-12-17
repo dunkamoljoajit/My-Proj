@@ -182,14 +182,19 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Logout
-app.post('/api/logout', async (req, res) => { 
-    const { userId } = req.body; 
-    if (!userId) return res.status(400).json({ message: 'UserID required' });
+app.post('/logout', async (req, res) => {
+    const userId = req.body.userId;
+    console.log("--> Logout Request Received:", userId);
+
     try {
-        await dbPool.query("UPDATE User SET Status = 'inactive' WHERE UserID = ?", [userId]);
-        res.json({ success: true });
+        const [result] = await dbPool.query(
+            "UPDATE User SET Status = 'inactive' WHERE UserID = ?", 
+            [userId]
+        );
+        res.clearCookie('token');
+        res.json({ message: "Logged out successfully" });
     } catch (err) {
-        console.error(err); res.status(500).json({ message: 'DB Error' });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -410,7 +415,57 @@ app.post('/api/admin/toggle-window', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false }); 
     } 
 });
-app.get('/api/admin/pending-counts', authenticateToken, async (req, res) => { try { const [swap] = await dbPool.query("SELECT COUNT(*) as count FROM Shift_Exchange WHERE status = 'pending'"); const [trade] = await dbPool.query("SELECT COUNT(*) as count FROM ShiftTransaction WHERE Status = 'Pending'"); res.json({ success: true, swapCount: swap[0].count, tradeCount: trade[0].count }); } catch (err) { res.status(500).json({ success: false }); } });
+app.post('/api/notifications/mark-all-read', authenticateToken, async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "Missing UserID" });
+
+    try {
+        // อัปเดตทุกรายการแจ้งเตือนของ User นั้นๆ ที่ยังไม่อ่าน (IsRead = 0) ให้เป็นอ่านแล้ว (IsRead = 1)
+        await dbPool.query(
+            "UPDATE Notifications SET IsRead = 1 WHERE UserID = ? AND IsRead = 0",
+            [userId]
+        );
+        res.json({ success: true, message: "ทำเครื่องหมายว่าอ่านแล้วทั้งหมดเรียบร้อย" });
+    } catch (err) {
+        console.error("Mark Read Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+// ✅ เพิ่ม API นี้เข้าไปใน index.js เพื่อแก้ Error 404
+app.get('/api/notifications/unread-count/:userId', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        
+        // นับเฉพาะรายการแจ้งเตือนที่ UserID ตรงกัน และ IsRead ยังเป็น 0 (ยังไม่อ่าน)
+        const [rows] = await dbPool.query(
+            "SELECT COUNT(*) as count FROM Notifications WHERE UserID = ? AND IsRead = 0",
+            [userId]
+        );
+        
+        res.json({ 
+            success: true, 
+            count: rows[0].count 
+        });
+    } catch (err) { 
+        console.error("Unread Count API Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" }); 
+    }
+});
+// ✅ แก้ไข API นับจำนวน Badge หัวหน้า
+app.get('/api/admin/pending-counts', authenticateToken, async (req, res) => {
+    try {
+        // นับเฉพาะรายการที่ "เพื่อนพยาบาลตกลงกันแล้ว" และ "รอหัวหน้าอนุมัติ"
+        const [swap] = await dbPool.query("SELECT COUNT(*) as count FROM Shift_Exchange WHERE status = 'accepted'");
+        const [trade] = await dbPool.query("SELECT COUNT(*) as count FROM ShiftTransaction WHERE Status = 'Pending_HeadNurse'");
+
+        res.json({ 
+            success: true, 
+            total: swap[0].count + trade[0].count, // ยอดรวมที่โชว์บนกระดิ่ง
+            swapCount: swap[0].count, 
+            tradeCount: trade[0].count 
+        });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
 app.get('/api/admin/get-settings', authenticateToken, async (req, res) => { try { const [rows] = await dbPool.query('SELECT * FROM SystemSettings'); const settings = {}; rows.forEach(r => { if (r.SettingKey === 'QuotaMorning') settings.morning = r.SettingValue; if (r.SettingKey === 'QuotaAfternoon') settings.afternoon = r.SettingValue; if (r.SettingKey === 'QuotaNight') settings.night = r.SettingValue; if (r.SettingKey === 'DeadlineDate') settings.deadline = r.SettingValue; }); res.json({ success: true, settings }); } catch (err) { res.status(500).json({ success: false }); } });
 app.post('/api/admin/save-settings', authenticateToken, async (req, res) => {
     const { morning, afternoon, night, deadline } = req.body;
@@ -495,32 +550,236 @@ app.post('/api/full-schedule', authenticateToken, async (req, res) => {
 
 app.post('/api/swaps/search', authenticateToken, async (req, res) => {
     const { date, shiftId, requesterId } = req.body;
-    if (!date) return res.status(400).json({ success: false, message: "กรุณาระบุวันที่ต้องการค้นหา" });
+    
+    if (!date) {
+        return res.status(400).json({ success: false, message: "กรุณาระบุวันที่ต้องการค้นหา" });
+    }
+
     try {
-        let sql = `SELECT U.FirstName, U.LastName, U.ProfileImage, NS.ScheduleID, NS.Nurse_Date, S.ShiftName, EP.ExchangePostID, EP.Message FROM ExchangePost EP JOIN NurseSchedule NS ON EP.ScheduleID = NS.ScheduleID JOIN User U ON NS.UserID = U.UserID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE EP.Status = 'Open' AND NS.Nurse_Date = ? AND U.UserID != ?`;
+        // SQL ใหม่: 
+        // 1. เริ่มจาก NurseSchedule (NS) เพื่อดึงทุกคนที่มีเวร
+        // 2. JOIN User และ Shift เพื่อเอาชื่อและเวลากะ
+        // 3. LEFT JOIN ExchangePost (EP) เพื่อดูว่าเขามีประกาศ "Open" อยู่ไหม (ถ้าไม่มีค่าจะเป็น null)
+        let sql = `
+            SELECT 
+                U.UserID, 
+                U.FirstName, 
+                U.LastName, 
+                U.ProfileImage, 
+                NS.ScheduleID, 
+                DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as Nurse_Date, 
+                S.ShiftName, 
+                S.Shift_id,
+                EP.ExchangePostID, 
+                EP.Message,
+                CASE 
+                    WHEN EP.ExchangePostID IS NOT NULL THEN 'Posted' 
+                    ELSE 'Normal' 
+                END as SwapStatus
+            FROM NurseSchedule NS 
+            JOIN User U ON NS.UserID = U.UserID 
+            JOIN Shift S ON NS.Shift_id = S.Shift_id 
+            LEFT JOIN ExchangePost EP ON NS.ScheduleID = EP.ScheduleID AND EP.Status = 'Open'
+            WHERE NS.Nurse_Date = ? AND U.UserID != ?
+        `;
+
         const params = [date, requesterId];
-        if (shiftId) { sql += " AND S.Shift_id = ? "; params.push(shiftId); }
+
+        // ถ้ามีการระบุ shiftId ให้กรองเฉพาะกะที่ต้องการด้วย
+        if (shiftId) { 
+            sql += " AND S.Shift_id = ? "; 
+            params.push(shiftId); 
+        }
+
+        // เรียงลำดับ: คนที่มีประกาศขึ้นก่อน, ตามด้วยชื่อ
+        sql += " ORDER BY SwapStatus DESC, U.FirstName ASC";
+
         const [results] = await dbPool.query(sql, params);
         res.json({ success: true, results });
-    } catch (err) { console.error(err); res.status(500).json({ success: false, message: "DB Error" }); }
+
+    } catch (err) { 
+        console.error("Search Swap Error:", err); 
+        res.status(500).json({ success: false, message: "DB Error" }); 
+    }
 });
 
 app.post('/api/swaps/send-request', authenticateToken, async (req, res) => {
     try {
-        const { requesterId, requesterScheduleId, postId, reason } = req.body;
-        if (!requesterId || !postId || !requesterScheduleId) return res.status(400).json({ success: false, message: 'ข้อมูลไม่ครบถ้วน' });
-        const [postData] = await dbPool.query("SELECT UserID, ScheduleID FROM ExchangePost WHERE ExchangePostID = ?", [postId]);
-        if (postData.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบประกาศนี้' });
-        const responderId = postData[0].UserID;
-        const responderScheduleId = postData[0].ScheduleID;
-        const [existing] = await dbPool.query("SELECT exchange_id FROM Shift_Exchange WHERE requester_schedule_id = ? AND responder_schedule_id = ? AND status = 'pending'", [requesterScheduleId, responderScheduleId]);
+        // รับค่า targetScheduleId (เวรเพื่อน) เพิ่มเข้ามา
+        const { requesterId, requesterScheduleId, postId, targetScheduleId, reason } = req.body;
+
+        // 1. เช็คข้อมูลฝั่งคนขอ (ต้องมีเสมอ)
+        if (!requesterId || !requesterScheduleId) {
+            return res.status(400).json({ success: false, message: 'ข้อมูลฝั่งคนขอไม่ครบถ้วน (requesterId หรือ requesterScheduleId)' });
+        }
+
+        let responderId = null;
+        let responderScheduleId = null;
+
+        // 2. กรณี A: แลกผ่านประกาศ (มี postId) - แบบเดิม
+        if (postId) {
+            const [postData] = await dbPool.query("SELECT UserID, ScheduleID FROM ExchangePost WHERE ExchangePostID = ?", [postId]);
+            if (postData.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบประกาศนี้' });
+            
+            responderId = postData[0].UserID;
+            responderScheduleId = postData[0].ScheduleID;
+        } 
+        // 3. กรณี B: แลกตรง (ไม่มี postId) - แบบใหม่ ⭐️
+        else if (targetScheduleId) {
+            // ไปค้นหาว่าเวรเป้าหมายนี้ เป็นของใคร?
+            const [scheduleData] = await dbPool.query("SELECT UserID, ScheduleID FROM NurseSchedule WHERE ScheduleID = ?", [targetScheduleId]);
+            if (scheduleData.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบเวรที่ต้องการแลก' });
+
+            responderId = scheduleData[0].UserID;
+            responderScheduleId = scheduleData[0].ScheduleID;
+
+            // ป้องกันการแลกเวรกับตัวเอง
+            if (responderId == requesterId) {
+                return res.status(400).json({ success: false, message: 'คุณจะแลกเวรกับตัวเองไม่ได้' });
+            }
+        } 
+        else {
+            // ถ้าไม่ส่งทั้ง postId และ targetScheduleId มาเลย
+            return res.status(400).json({ success: false, message: 'ระบุข้อมูลไม่ครบ (ต้องมี postId หรือ targetScheduleId)' });
+        }
+
+        // 4. เช็คว่าเคยขอไปหรือยัง (Logic เดิม)
+        const [existing] = await dbPool.query(
+            "SELECT exchange_id FROM Shift_Exchange WHERE requester_schedule_id = ? AND responder_schedule_id = ? AND status = 'pending'", 
+            [requesterScheduleId, responderScheduleId]
+        );
         if (existing.length > 0) return res.status(400).json({ success: false, message: 'คำขอนี้รอการอนุมัติอยู่แล้ว' });
-        const sql = `INSERT INTO Shift_Exchange (requester_id, requester_schedule_id, responder_id, responder_schedule_id, status, reason, created_at) VALUES (?, ?, ?, ?, 'pending', ?, NOW())`;
+
+        // 5. บันทึกลง Database
+        const sql = `INSERT INTO Shift_Exchange (requester_id, requester_schedule_id, responder_id, responder_schedule_id, status, reason, created_at) VALUES (?, ?, ?, ?, 'pending', ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
         await dbPool.query(sql, [requesterId, requesterScheduleId, responderId, responderScheduleId, reason]);
-        res.json({ success: true, message: 'ส่งคำขอเรียบร้อย รอหัวหน้าอนุมัติ' });
-    } catch (err) { console.error(err); res.status(500).json({ success: false, message: "Server Error" }); }
+
+        res.json({ success: true, message: 'ส่งคำขอเรียบร้อย รอเพื่อนหรือหัวหน้าอนุมัติ' });
+
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).json({ success: false, message: "Server Error: " + err.message }); 
+    }
+});
+// =======================================================
+// [เพิ่มใหม่] API ให้เพื่อนกดตอบรับ/ปฏิเสธ คำขอแลกเวร
+// =======================================================
+app.post('/api/swaps/respond', authenticateToken, async (req, res) => {
+    const { swapId, action, responderId } = req.body;
+
+    if (!swapId || !action || !responderId) return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบ" });
+
+    try {
+        const [check] = await dbPool.query(
+            "SELECT * FROM Shift_Exchange WHERE exchange_id = ? AND responder_id = ? AND status = 'pending'", 
+            [swapId, responderId]
+        );
+
+        if (check.length === 0) return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์ดำเนินการ" });
+
+        if (action === 'approve') {
+            // ✅ เปลี่ยนเป็น 'accepted' (เพื่อให้ตรงกับ ENUM ใน DB)
+            await dbPool.query("UPDATE Shift_Exchange SET status = 'accepted' WHERE exchange_id = ?", [swapId]);
+            res.json({ success: true, message: "ยอมรับคำขอแล้ว รอหัวหน้าอนุมัติ" });
+        } else if (action === 'reject') {
+            await dbPool.query("UPDATE Shift_Exchange SET status = 'rejected' WHERE exchange_id = ?", [swapId]);
+            res.json({ success: true, message: "ปฏิเสธคำขอเรียบร้อย" });
+        } else {
+            res.status(400).json({ success: false, message: "Action ไม่ถูกต้อง" });
+        }
+    } catch (err) {
+        console.error("Swap Respond Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
 });
 
+app.get('/api/notifications/all/:userId', authenticateToken, async (req, res) => {
+    const userId = req.params.userId;
+    const userRole = req.user.roleId || 2; 
+
+    try {
+        let buyReqs = [], swapReqs = [];
+        let paramsBuy = [], paramsSwap = [];
+
+        // --- 1. ดึงรายการคำขอที่รอการตอบรับ (Pending Requests) ---
+        if (userRole === 1) { // หัวหน้าพยาบาล
+            // ดูรายการที่เพื่อนพยาบาลตกลงกันแล้ว รอหัวหน้าอนุมัติ
+            const sqlBuyAdmin = `
+                SELECT ST.TransactionID as id, 'buy' as type, 
+                DATE_FORMAT(DATE_ADD(ST.CreatedAt, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, 
+                ST.Price as info, Buyer.FirstName, Buyer.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate 
+                FROM ShiftTransaction ST 
+                JOIN User Buyer ON ST.BuyerID = Buyer.UserID 
+                JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID 
+                JOIN Shift S ON NS.Shift_id = S.Shift_id 
+                WHERE ST.Status = 'Pending_HeadNurse'
+            `;
+            const sqlSwapAdmin = `
+                SELECT SE.exchange_id as id, 'swap' as type, 
+                DATE_FORMAT(DATE_ADD(SE.created_at, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, 
+                SE.reason as info, Requester.FirstName, Requester.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate 
+                FROM Shift_Exchange SE 
+                JOIN User Requester ON SE.requester_id = Requester.UserID 
+                JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID 
+                JOIN Shift S ON NS.Shift_id = S.Shift_id 
+                WHERE SE.status = 'accepted' 
+            `;
+            const [b] = await dbPool.query(sqlBuyAdmin); buyReqs = b;
+            const [s] = await dbPool.query(sqlSwapAdmin); swapReqs = s;
+        } else { // พยาบาลทั่วไป
+            // ดูรายการที่มีคนส่งมาขอแลก/ซื้อกับเรา
+            const sqlBuyNurse = `
+                SELECT ST.TransactionID as id, 'buy' as type, 
+                DATE_FORMAT(DATE_ADD(ST.CreatedAt, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, 
+                ST.Price as info, Buyer.FirstName, Buyer.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate 
+                FROM ShiftTransaction ST 
+                JOIN User Buyer ON ST.BuyerID = Buyer.UserID 
+                JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID 
+                JOIN Shift S ON NS.Shift_id = S.Shift_id 
+                WHERE ST.SellerID = ? AND ST.Status = 'Pending_Seller'
+            `;
+            const sqlSwapNurse = `
+                SELECT SE.exchange_id as id, 'swap' as type, 
+                DATE_FORMAT(DATE_ADD(SE.created_at, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, 
+                SE.reason as info, Requester.FirstName, Requester.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate 
+                FROM Shift_Exchange SE 
+                JOIN User Requester ON SE.requester_id = Requester.UserID 
+                JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID 
+                JOIN Shift S ON NS.Shift_id = S.Shift_id 
+                WHERE SE.responder_id = ? AND SE.status = 'pending'
+            `;
+            const [b] = await dbPool.query(sqlBuyNurse, [userId]); buyReqs = b;
+            const [s] = await dbPool.query(sqlSwapNurse, [userId]); swapReqs = s;
+        }
+
+        // --- 2. ดึงรายการแจ้งเตือนจากตาราง Notifications (ประวัติที่หัวหน้าอนุมัติแล้ว) ---
+        const sqlSystem = `
+            SELECT 
+                NotiID as id, 
+                'system' as type, 
+                DATE_FORMAT(CreatedAt, '%Y-%m-%dT%H:%i:%s') as created_at,
+                Message as info,
+                'ระบบ' as FirstName, 
+                Title as LastName, 
+                RelatedShift as ShiftName,    -- ดึงชื่อกะที่บันทึกไว้
+                RelatedDate as ShiftDate       -- ดึงวันที่เวรที่เกี่ยวข้อง
+            FROM Notifications 
+            WHERE UserID = ? 
+            ORDER BY CreatedAt DESC LIMIT 30
+        `;
+        const [systemNotis] = await dbPool.query(sqlSystem, [userId]);
+
+        // --- 3. รวมแจ้งเตือนทั้งหมดและเรียงลำดับเวลาใหม่ ---
+        const allNotis = [...buyReqs, ...swapReqs, ...systemNotis];
+        allNotis.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        res.json({ success: true, notifications: allNotis });
+
+    } catch (err) { 
+        console.error("Noti Error:", err); 
+        res.status(500).json({ success: false, message: "Server Error" }); 
+    }
+});
 app.get('/api/admin/swaps/pending', authenticateToken, async (req, res) => {
     try {
         const sql = `SELECT SE.exchange_id, SE.reason, SE.created_at, ReqU.FirstName AS ReqName, ReqU.LastName AS ReqLast, ReqShift.ShiftName AS ReqShift, ReqNS.Nurse_Date AS ReqDate, ResU.FirstName AS ResName, ResU.LastName AS ResLast, ResShift.ShiftName AS ResShift, ResNS.Nurse_Date AS ResDate FROM Shift_Exchange SE JOIN User ReqU ON SE.requester_id = ReqU.UserID JOIN NurseSchedule ReqNS ON SE.requester_schedule_id = ReqNS.ScheduleID JOIN Shift ReqShift ON ReqNS.Shift_id = ReqShift.Shift_id JOIN User ResU ON SE.responder_id = ResU.UserID JOIN NurseSchedule ResNS ON SE.responder_schedule_id = ResNS.ScheduleID JOIN Shift ResShift ON ResNS.Shift_id = ResShift.Shift_id WHERE SE.status = 'pending' ORDER BY SE.created_at ASC`;
@@ -531,49 +790,148 @@ app.get('/api/admin/swaps/pending', authenticateToken, async (req, res) => {
 
 app.post('/api/admin/swaps/action', authenticateToken, async (req, res) => {
     const { swapId, action, adminId } = req.body;
-    if (!swapId || !action) return res.status(400).json({ success: false });
     const connection = await dbPool.getConnection();
+
     try {
         await connection.beginTransaction();
-        const [swaps] = await connection.query("SELECT * FROM Shift_Exchange WHERE exchange_id = ? FOR UPDATE", [swapId]);
-        if (swaps.length === 0) throw new Error("ไม่พบรายการ");
-        const swap = swaps[0];
-        if (swap.status !== 'pending') throw new Error("รายการนี้ถูกดำเนินการไปแล้ว");
-        if (action === 'reject') {
-            await connection.query("UPDATE Shift_Exchange SET status = 'rejected', approver_id = ? WHERE exchange_id = ?", [adminId, swapId]);
-        } else if (action === 'approve') {
-            await connection.query("UPDATE Shift_Exchange SET status = 'accepted', approver_id = ? WHERE exchange_id = ?", [adminId, swapId]);
-            await connection.query("UPDATE ExchangePost SET Status = 'Closed' WHERE ScheduleID IN (?, ?)", [swap.responder_schedule_id, swap.requester_schedule_id]);
-            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [swap.requester_id, swap.responder_schedule_id]);
-            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [swap.responder_id, swap.requester_schedule_id]);
-        }
-        await connection.commit();
-        res.json({ success: true, message: action === 'approve' ? "อนุมัติและสลับเวรเรียบร้อย" : "ปฏิเสธคำขอเรียบร้อย" });
-    } catch (err) { await connection.rollback(); console.error("Action Error:", err); res.status(500).json({ success: false, message: err.message }); } finally { connection.release(); }
-});
 
+        // 1. ดึงข้อมูลรายการแลกเวร (ใช้ชื่อคอลัมน์ที่ถูกต้องตามตาราง Shift_Exchange ของคุณ)
+        const [swaps] = await connection.query(`
+            SELECT se.*, 
+                   ns1.Nurse_Date as Date1, ns1.Shift_id as Shift1,
+                   ns2.Nurse_Date as Date2, ns2.Shift_id as Shift2
+            FROM Shift_Exchange se
+            JOIN NurseSchedule ns1 ON se.requester_schedule_id = ns1.ScheduleID
+            JOIN NurseSchedule ns2 ON se.responder_schedule_id = ns2.ScheduleID
+            WHERE se.exchange_id = ? FOR UPDATE`, [swapId]);
+
+        if (swaps.length === 0) throw new Error("ไม่พบรายการแลกเวร");
+        const swap = swaps[0];
+
+        const createNoti = `INSERT INTO Notifications (UserID, Title, Message, Type, RelatedDate, RelatedShift, CreatedAt) 
+                            VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+
+        if (action === 'approve') {
+            // 2. สลับเจ้าของเวรใน NurseSchedule จริงๆ
+            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [swap.responder_id, swap.requester_schedule_id]);
+            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [swap.requester_id, swap.responder_schedule_id]);
+
+            // 3. อัปเดตสถานะเป็น 'approved'
+            await connection.query("UPDATE Shift_Exchange SET status = 'approved', approved_by = ? WHERE exchange_id = ?", [adminId, swapId]);
+
+            // 4. บันทึกสถิติ ExchangesMade (จำนวนครั้งที่แลกเวร)
+            const statsSql = `INSERT INTO NurseStatistics (UserID, Year, Month, ExchangesMade, TotalShifts, CreatedAt) 
+                              VALUES (?, YEAR(NOW()), MONTH(NOW()), 1, 0, DATE_ADD(NOW(), INTERVAL 7 HOUR)) 
+                              ON DUPLICATE KEY UPDATE ExchangesMade = ExchangesMade + 1`;
+            
+            await connection.query(statsSql, [swap.requester_id]);
+            await connection.query(statsSql, [swap.responder_id]);
+
+            // 5. แจ้งเตือนพยาบาลทั้งคู่ (แบบอ่านอย่างเดียว - system)
+            const msg = `หัวหน้าอนุมัติการแลกเวรวันที่ ${swap.Date1} และ ${swap.Date2} เรียบร้อยแล้ว`;
+            await connection.query(createNoti, [swap.requester_id, 'การแลกเวรสำเร็จ', msg, 'system', swap.Date1, 'สลับเวรสำเร็จ']);
+            await connection.query(createNoti, [swap.responder_id, 'การแลกเวรสำเร็จ', msg, 'system', swap.Date2, 'สลับเวรสำเร็จ']);
+
+        } else if (action === 'reject') {
+            await connection.query("UPDATE Shift_Exchange SET status = 'rejected', approvedby = ? WHERE exchange_id = ?", [adminId, swapId]);
+            await connection.query(createNoti, [swap.requester_id, 'การแลกเวรถูกปฏิเสธ', 'หัวหน้าไม่อนุมัติการแลกเวรของคุณ', 'system', swap.Date1, 'แลกเวรไม่สำเร็จ']);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: action === 'approve' ? "อนุมัติเรียบร้อย" : "ปฏิเสธเรียบร้อย" });
+    } catch (err) {
+        await connection.rollback();
+        res.status(500).json({ success: false, message: err.message });
+    } finally { connection.release(); }
+});
+// ✅ แก้ไข API ดึงประวัติการแลกเวร
 app.get('/api/swaps/history/:userId', authenticateToken, async (req, res) => {
     try {
-        const sql = `SELECT SE.exchange_id, SE.status, SE.created_at, SE.reason, ResU.FirstName AS PartnerName, CASE WHEN SE.requester_id = ? THEN 'Sent Request' ELSE 'Incoming Request' END as Type FROM Shift_Exchange SE JOIN User ResU ON (SE.responder_id = ResU.UserID OR SE.requester_id = ResU.UserID) WHERE (SE.requester_id = ? OR SE.responder_id = ?) AND ResU.UserID != ? ORDER BY SE.created_at DESC`;
         const userId = req.params.userId;
+        // ปรับ SQL ให้ Join กับตาราง NurseSchedule เพื่อเอาวันที่เวรมาโชว์ด้วย
+        const sql = `
+            SELECT 
+                SE.exchange_id, 
+                SE.status, 
+                DATE_FORMAT(DATE_ADD(SE.created_at, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, 
+                SE.reason, 
+                ResU.FirstName AS PartnerName, 
+                ResU.LastName AS PartnerLastName,
+                DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate,
+                S.ShiftName,
+                CASE 
+                    WHEN SE.requester_id = ? THEN 'Sent Request' 
+                    ELSE 'Incoming Request' 
+                END as Direction 
+            FROM Shift_Exchange SE 
+            JOIN User ResU ON (SE.responder_id = ResU.UserID OR SE.requester_id = ResU.UserID)
+            JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID
+            JOIN Shift S ON NS.Shift_id = S.Shift_id
+            WHERE (SE.requester_id = ? OR SE.responder_id = ?) 
+              AND ResU.UserID != ? 
+            ORDER BY SE.created_at DESC`;
+
         const [results] = await dbPool.query(sql, [userId, userId, userId, userId]);
         res.json({ success: true, results });
-    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
+    } catch (err) { 
+        console.error("History Error:", err); 
+        res.status(500).json({ success: false, message: "Server Error" }); 
+    }
 });
 
+// ✅ แก้ไข API ดึงแจ้งเตือนรวม
 app.get('/api/notifications/all/:userId', authenticateToken, async (req, res) => {
     const userId = req.params.userId;
-    try {
-        const sqlBuy = `SELECT ST.TransactionID as id, 'buy' as type, ST.CreatedAt as created_at, ST.Price as info, Buyer.FirstName, Buyer.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM ShiftTransaction ST JOIN User Buyer ON ST.BuyerID = Buyer.UserID JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE ST.SellerID = ? AND ST.Status = 'Pending_Seller'`;
-        const sqlSwap = `SELECT SE.exchange_id as id, 'swap' as type, SE.created_at as created_at, se.reason as info, Requester.FirstName, Requester.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM Shift_Exchange SE JOIN User Requester ON SE.requester_id = Requester.UserID JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE SE.responder_id = ? AND SE.status = 'pending'`;
-        const [buyReqs] = await dbPool.query(sqlBuy, [userId]);
-        const [swapReqs] = await dbPool.query(sqlSwap, [userId]);
-        const allNotis = [...buyReqs, ...swapReqs];
-        allNotis.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        res.json({ success: true, notifications: allNotis });
-    } catch (err) { console.error("Noti Error:", err); res.status(500).json({ success: false, message: "Server Error" }); }
-});
+    const userRole = req.user.roleId || 2; 
 
+    try {
+        let buyReqs = [], swapReqs = [];
+
+        // ส่วนที่ 1: ดึง Request เดิม (Swap/Buy) -- Logic เดิมของคุณ
+        if (userRole === 1) { // หัวหน้า
+             // SQL เดิมของหัวหน้า (หา Pending_HeadNurse / pending_head_nurse)
+             // ... ใส่โค้ดเดิมตรงนี้ ...
+        } else { // พยาบาลทั่วไป
+             const sqlBuy = `SELECT ST.TransactionID as id, 'buy' as type, DATE_FORMAT(DATE_ADD(ST.CreatedAt, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, ST.Price as info, Buyer.FirstName, Buyer.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM ShiftTransaction ST JOIN User Buyer ON ST.BuyerID = Buyer.UserID JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE ST.SellerID = ? AND ST.Status = 'Pending_Seller'`;
+             const sqlSwap = `SELECT SE.exchange_id as id, 'swap' as type, DATE_FORMAT(DATE_ADD(SE.created_at, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, se.reason as info, Requester.FirstName, Requester.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM Shift_Exchange SE JOIN User Requester ON SE.requester_id = Requester.UserID JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE SE.responder_id = ? AND SE.status = 'pending'`;
+
+             const [r1] = await dbPool.query(sqlBuy, [userId]);
+             buyReqs = r1;
+             const [r2] = await dbPool.query(sqlSwap, [userId]);
+             swapReqs = r2;
+        }
+
+        // ✅ ส่วนที่ 2 (เพิ่มใหม่): ดึงจากตาราง Notifications
+        // Map ชื่อ Field ให้ตรงกับที่ Frontend ใช้ (FirstName, LastName, info)
+        const sqlSystem = `
+                SELECT 
+                    NotiID as id, 
+                    'system' as type, 
+                    DATE_FORMAT(CreatedAt, '%Y-%m-%dT%H:%i:%s') as created_at,
+                    Message as info,
+                    'ระบบ' as FirstName, 
+                    Title as LastName, 
+                    RelatedShift as ShiftName,
+                    RelatedDate as ShiftDate 
+                FROM Notifications 
+                WHERE UserID = ? 
+                ORDER BY CreatedAt DESC LIMIT 30
+            `;
+        const [systemNotis] = await dbPool.query(sqlSystem, [userId]);
+
+        // 3. รวมร่างแล้วส่งกลับ
+        const allNotis = [...buyReqs, ...swapReqs, ...systemNotis];
+        
+        // เรียงตามเวลาล่าสุด
+        allNotis.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        res.json({ success: true, notifications: allNotis });
+
+    } catch (err) { 
+        console.error("Noti Error:", err); 
+        res.status(500).json({ success: false, message: "Server Error" }); 
+    }
+});
 app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
     try {
         const sql = `SELECT EP.ExchangePostID as PostID, EP.DesiredShiftDate as DesiredDate, EP.Message as Note, EP.CreatedAt as Created_At, S.ShiftName, NS.Nurse_Date FROM ExchangePost EP JOIN NurseSchedule NS ON EP.ScheduleID = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE EP.UserID = ? AND EP.Status = 'Open' ORDER BY EP.CreatedAt DESC`;
@@ -764,31 +1122,58 @@ app.get('/api/admin/market/pending', authenticateToken, async (req, res) => {
         res.json({ success: true, results });
     } catch (err) { console.error("Fetch Pending Market Error:", err); res.status(500).json({ success: false, message: "DB Error" }); }
 });
-
+// ✅ API อนุมัติการซื้อขาย (Full Updated Version)
 app.post('/api/admin/market/action', authenticateToken, async (req, res) => {
     const { transactionId, action, adminId } = req.body;
-    if (!transactionId || !action) return res.status(400).json({ success: false });
     const connection = await dbPool.getConnection();
     try {
         await connection.beginTransaction();
-        const [trans] = await connection.query("SELECT * FROM ShiftTransaction WHERE TransactionID = ? FOR UPDATE", [transactionId]);
+
+        // ดึงข้อมูลวันที่และชื่อกะเพื่อใช้ในการแจ้งเตือน (ป้องกัน Invalid Date)
+        const [trans] = await connection.query(`
+            SELECT ST.*, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate, S.ShiftName 
+            FROM ShiftTransaction ST 
+            JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID 
+            JOIN Shift S ON NS.Shift_id = S.Shift_id
+            WHERE ST.TransactionID = ? FOR UPDATE`, [transactionId]);
+        
         if (trans.length === 0) throw new Error("ไม่พบรายการ");
         const trade = trans[0];
-        if (trade.Status !== 'Pending_HeadNurse') throw new Error("สถานะไม่ถูกต้อง");
-        if (action === 'reject') {
-            await connection.query("UPDATE ShiftTransaction SET Status = 'Rejected_ByAdmin', ApproverID = ? WHERE TransactionID = ?", [adminId, transactionId]);
-        } else if (action === 'approve') {
-            await connection.query("UPDATE ShiftTransaction SET Status = 'Completed', ApproverID = ? WHERE TransactionID = ?", [adminId, transactionId]);
-            await connection.query("UPDATE PostSell SET Status = 'Closed' WHERE PostSellID = ?", [trade.PostSellID]);
-            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [trade.BuyerID, trade.ScheduleID]);
-            await connection.query(`INSERT INTO NurseStatistics (UserID, Year, ShiftsSold) VALUES (?, YEAR(NOW()), 1) ON DUPLICATE KEY UPDATE ShiftsSold = ShiftsSold + 1`, [trade.SellerID]);
-            await connection.query(`INSERT INTO NurseStatistics (UserID, Year, ShiftsBought) VALUES (?, YEAR(NOW()), 1) ON DUPLICATE KEY UPDATE ShiftsBought = ShiftsBought + 1`, [trade.BuyerID]);
-        }
-        await connection.commit();
-        res.json({ success: true, message: action === 'approve' ? "อนุมัติเรียบร้อย" : "ปฏิเสธเรียบร้อย" });
-    } catch (err) { await connection.rollback(); console.error("Market Admin Error:", err); res.status(500).json({ success: false, message: err.message }); } finally { connection.release(); }
-});
 
+        const createNoti = `INSERT INTO Notifications (UserID, Title, Message, Type, RelatedDate, RelatedShift, CreatedAt) 
+                            VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+
+        if (action === 'reject') {
+            // อัปเดตสถานะเป็น Rejected (ตัวใหญ่ตามรูป DB)
+            await connection.query("UPDATE ShiftTransaction SET Status = 'Rejected', ApprovedBy = ? WHERE TransactionID = ?", [adminId, transactionId]);
+            await connection.query(createNoti, [trade.BuyerID, 'การซื้อเวรถูกปฏิเสธ', 'หัวหน้าปฏิเสธคำขอซื้อเวรของคุณ', 'system', trade.ShiftDate, trade.ShiftName]);
+            
+        } else if (action === 'approve') {
+            // 1. อัปเดตสถานะเป็น Completed และเปลี่ยนเจ้าของเวรใน NurseSchedule
+            await connection.query("UPDATE ShiftTransaction SET Status = 'Completed', ApprovedBy = ? WHERE TransactionID = ?", [adminId, transactionId]);
+            await connection.query("UPDATE PostSell SET Status = 'Sold' WHERE PostSellID = ?", [trade.PostSellID]);
+            await connection.query("UPDATE NurseSchedule SET UserID = ? WHERE ScheduleID = ?", [trade.BuyerID, trade.ScheduleID]);
+            
+            // 2. จัดการสถิติ (ป้องกัน Error 1364 ด้วย Default Values ใน DB)
+            const statsSql = `INSERT INTO NurseStatistics (UserID, Year, Month, ShiftsSold, TotalShifts, CreatedAt) 
+                              VALUES (?, YEAR(NOW()), MONTH(NOW()), 1, 1, DATE_ADD(NOW(), INTERVAL 7 HOUR)) 
+                              ON DUPLICATE KEY UPDATE ShiftsSold = ShiftsSold + 1, TotalShifts = TotalShifts + 1`;
+            
+            await connection.query(statsSql, [trade.SellerID]);
+            await connection.query(statsSql.replace('ShiftsSold', 'ShiftsBought'), [trade.BuyerID]);
+
+            // 3. ส่งแจ้งเตือนแบบอ่านอย่างเดียว (แก้ปัญหา Invalid Date)
+            await connection.query(createNoti, [trade.BuyerID, 'การซื้อเวรสำเร็จ', `อนุมัติการซื้อเวรวันที่ ${trade.ShiftDate} แล้ว`, 'system', trade.ShiftDate, trade.ShiftName]);
+            await connection.query(createNoti, [trade.SellerID, 'การขายเวรสำเร็จ', `อนุมัติการขายเวรวันที่ ${trade.ShiftDate} แล้ว`, 'system', trade.ShiftDate, trade.ShiftName]);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: "ดำเนินการเรียบร้อย" });
+    } catch (err) { 
+        await connection.rollback(); 
+        res.status(500).json({ success: false, message: err.message }); 
+    } finally { connection.release(); }
+});
 app.post('/api/admin/add-user', authenticateToken, async (req, res) => {
     try {
         // 1. เช็คสิทธิ์ว่าเป็น Admin (RoleID = 1) เท่านั้น
@@ -849,6 +1234,17 @@ app.post('/api/admin/add-user', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, message: 'อีเมลนี้มีอยู่ในระบบแล้ว' });
         }
         res.status(500).json({ success: false, message: 'Server Error: ' + err.message });
+    }
+});
+app.get('/api/admin/check-submission-status', authenticateToken, async (req, res) => {
+    try {
+        // ดึงสถานะปัจจุบันจากตาราง SystemSettings
+        const [rows] = await dbPool.query("SELECT SettingValue FROM SystemSettings WHERE SettingKey = 'WindowStatus'");
+        const isOpen = rows.length > 0 && rows[0].SettingValue === 'Open';
+        res.json({ success: true, isOpen: isOpen });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 });
 // ==========================================
