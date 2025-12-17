@@ -380,11 +380,8 @@ customElements.define('app-date-picker', AppDatePicker);
         const user = getUser();
         if (!user) return;
 
-        // ล้างข้อมูลในเครื่องทันทีเพื่อความปลอดภัย
-        localStorage.removeItem('token');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-
+        // ✅ แก้ไขตรงนี้: เรียกใช้ฟังก์ชัน logout() ที่เราทำไว้ด้านบนสุดของไฟล์
+        // เพื่อให้ระบบยิง API ไปบอก Server และล้างค่า LocalStorage พร้อม Redirect ทีเดียว
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
@@ -393,31 +390,28 @@ customElements.define('app-date-picker', AppDatePicker);
                 timer: 4000,
                 timerProgressBar: true,
                 showConfirmButton: false,
-                allowOutsideClick: false, // บังคับให้ดูแจ้งเตือนจนกว่าจะ Redirect
+                allowOutsideClick: false,
                 allowEscapeKey: false
             }).then(() => {
-                window.location.href = 'login.html';
+                logout(); // 👈 เรียกฟังก์ชัน logout หลักที่ประกาศไว้ด้านบน
             });
         } else {
             alert('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่');
-            window.location.href = 'login.html';
+            logout(); // 👈 เรียกฟังก์ชัน logout หลัก
         }
     };
 
     const resetTimer = () => {
-        // ถ้าไม่ได้ Login อยู่แล้ว ไม่ต้องรัน Timer
-        if (!localStorage.getItem('user')) return;
-        
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(performLogout, IDLE_TIMEOUT);
+        if (!localStorage.getItem('user')) return; //
+        clearTimeout(idleTimer); //
+        idleTimer = setTimeout(performLogout, IDLE_TIMEOUT); //
     };
 
-    // ตรวจสอบเหตุการณ์ที่แสดงว่าผู้ใช้ยังใช้งานอยู่ (Activity Events)
+    // Events ที่จะ Reset Timer
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     events.forEach(evt => {
-        document.addEventListener(evt, resetTimer, { passive: true });
+        document.addEventListener(evt, resetTimer, { passive: true }); //
     });
     
-    // เริ่มต้นทำงานครั้งแรก
-    resetTimer();
+    resetTimer(); // Start Timer
 })();
