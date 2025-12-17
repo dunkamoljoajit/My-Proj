@@ -370,36 +370,54 @@ customElements.define('app-date-picker', AppDatePicker);
 
 
 // =========================================================
-// 3. AUTO LOGOUT SYSTEM (Global Idle Timeout)
+// 3. AUTO LOGOUT SYSTEM (Global Idle Timeout - 15 Minutes)
 // =========================================================
 (function() {
     const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 นาที
     let idleTimer;
 
-    const resetTimer = () => {
-        if (!localStorage.getItem('user')) return;
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-            // Logic Auto Logout
-            const user = getUser();
-            if (user) {
-                // แจ้งเตือนหรือบังคับออกเลยก็ได้
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning', title: 'หมดเวลาการใช้งาน', text: 'กรุณาเข้าสู่ระบบใหม่',
-                        timer: 3000, showConfirmButton: false
-                    }).then(() => { localStorage.clear(); window.location.href = 'login.html'; });
-                } else {
-                    alert('หมดเวลาการใช้งาน'); localStorage.clear(); window.location.href = 'login.html';
-                }
-            }
-        }, IDLE_TIMEOUT);
+    const performLogout = () => {
+        const user = getUser();
+        if (!user) return;
+
+        // ล้างข้อมูลในเครื่องทันทีเพื่อความปลอดภัย
+        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'หมดเวลาการใช้งาน',
+                text: 'คุณไม่ได้ทำรายการเกิน 15 นาที ระบบจะนำคุณกลับไปหน้า Login',
+                timer: 4000,
+                timerProgressBar: true,
+                showConfirmButton: false,
+                allowOutsideClick: false, // บังคับให้ดูแจ้งเตือนจนกว่าจะ Redirect
+                allowEscapeKey: false
+            }).then(() => {
+                window.location.href = 'login.html';
+            });
+        } else {
+            alert('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่');
+            window.location.href = 'login.html';
+        }
     };
 
-    // Events ที่จะ Reset Timer
-    ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(evt => {
-        document.addEventListener(evt, resetTimer, true);
+    const resetTimer = () => {
+        // ถ้าไม่ได้ Login อยู่แล้ว ไม่ต้องรัน Timer
+        if (!localStorage.getItem('user')) return;
+        
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(performLogout, IDLE_TIMEOUT);
+    };
+
+    // ตรวจสอบเหตุการณ์ที่แสดงว่าผู้ใช้ยังใช้งานอยู่ (Activity Events)
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach(evt => {
+        document.addEventListener(evt, resetTimer, { passive: true });
     });
     
-    resetTimer(); // Start Timer
+    // เริ่มต้นทำงานครั้งแรก
+    resetTimer();
 })();
