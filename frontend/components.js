@@ -123,18 +123,18 @@ class AppHeader extends HTMLElement {
 
                     <div id="profile-menu-trigger" class="relative flex items-center gap-2 cursor-pointer bg-white hover:bg-slate-50 py-1 pl-1 pr-3 rounded-full border border-slate-200 shadow-sm transition-all min-w-fit">
                         <img id="header-avatar" 
-                             class="w-8 h-8 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" 
-                             src="${getProfileImageUrl(user.ProfileImage)}" 
-                             onerror="this.src='https://placehold.co/100?text=User'">
+                            class="w-10 h-10 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" 
+                            src="${getProfileImageUrl(user.ProfileImage)}" 
+                            onerror="this.src='https://placehold.co/100?text=User'">
                         
                         <div class="flex flex-col items-start leading-tight">
-                            <span class="text-[11px] font-medium text-slate-600 truncate max-w-[80px]">${user.FirstName}</span>
-                            <span class="text-[7px] text-emerald-500 font-normal flex items-center gap-1 mt-0.5 tracking-tighter">
-                                <span class="w-1 h-1 bg-emerald-400 rounded-full animate-pulse opacity-80"></span>
+                            <span class="text-sm font-bold text-slate-700 truncate max-w-[100px]">${user.FirstName}</span>
+                            <span class="text-[10px] text-emerald-500 font-bold flex items-center gap-1 mt-0.5 tracking-tight uppercase">
+                                <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
                                 ONLINE
                             </span>
                         </div>
-                        <i class="fas fa-chevron-down text-[7px] text-slate-400 ml-0.5 shrink-0"></i>
+                        <i class="fas fa-chevron-down text-xs text-slate-400 ml-1 shrink-0"></i>
                     </div>
 
                 </div>
@@ -415,3 +415,33 @@ customElements.define('app-date-picker', AppDatePicker);
     
     resetTimer(); // Start Timer
 })();
+// ฟังก์ชันสำหรับสร้าง Logo
+function LogoComponent() {
+    return `
+        <div class="logo">
+            <img src="https://img5.pic.in.th/file/secure-sv1/logo-nurse.png" alt="Logo" class="logo-img">
+            <span class="logo-text">AUTONURSESHIFT</span>
+        </div>
+    `;
+}
+
+// ฟังก์ชันสำหรับสร้าง Success Card
+function SuccessCardComponent(props) {
+    const { title, message, btnText, btnLink } = props;
+    
+    // สร้างรายการข้อความ
+    const messageHtml = message.map(text => `<span class="sub-text">${text}</span>`).join('');
+
+    return `
+        <div class="success-box fade-in">
+            <div class="success-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2>${title}</h2>
+            <div class="text-wrapper">
+                ${messageHtml}
+            </div>
+            <a href="${btnLink}" class="goto-login-btn">${btnText}</a>
+        </div>
+    `;
+}

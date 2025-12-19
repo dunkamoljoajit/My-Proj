@@ -8,9 +8,10 @@ const multer = require('multer');
 const path = require('path');
 const jwt = require('jsonwebtoken'); 
 const xlsx = require('xlsx');
-const port = 3000; 
+const port = process.env.PORT || 3000; 
 // Library สำหรับ Vercel/Cloudinary ---
 const cloudinary = require('cloudinary').v2;
+const moment = require('moment');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 require('dotenv').config();
@@ -33,8 +34,12 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-        folder: 'autonurseshift-profiles', // ชื่อโฟลเดอร์บน Cloudinary
+        folder: 'autonurseshift-profiles',
         allowed_formats: ['jpg', 'png', 'jpeg'],
+        transformation: [
+            { width: 400, height: 400, crop: 'fill', gravity: 'face' }, 
+            { quality: 'auto', fetch_format: 'auto' }
+        ]
     },
 });
 const upload = multer({ storage: storage });
@@ -111,6 +116,57 @@ function getThaiTimeInMySQLFormat(addMinutes = 0) {
     const now = new Date();
     if (addMinutes > 0) now.setMinutes(now.getMinutes() + addMinutes);
     return now.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace('T', ' ');
+}
+async function checkFatigueStatus(dbPool, userId, targetDate, targetShiftId) {
+    try {
+        // --- 1. ตรวจสอบเวรซ้อนในวันเดียวกัน ---
+        const [existing] = await dbPool.query(
+            "SELECT S.ShiftName FROM NurseSchedule NS JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE NS.UserID = ? AND NS.Nurse_Date = ?", 
+            [userId, targetDate]
+        );
+        if (existing.length > 0) {
+            return { safe: false, message: `ไม่สามารถรับเวรเพิ่มได้ เนื่องจากคุณมีเวร ${existing[0].ShiftName} ในวันที่นี้อยู่แล้ว` };
+        }
+
+        // --- 2. ตรวจสอบกฎ "ดึก-ต่อ-เช้า" (พักผ่อนไม่เพียงพอ) ---
+        if (targetShiftId == 1) { // 1 = เวรเช้า
+            const [prevNight] = await dbPool.query(
+                "SELECT * FROM NurseSchedule WHERE UserID = ? AND Nurse_Date = DATE_SUB(?, INTERVAL 1 DAY) AND Shift_id = 3", 
+                [userId, targetDate] // 3 = เวรดึก
+            );
+            if (prevNight.length > 0) {
+                return { safe: false, message: "ผิดกฎความปลอดภัย: ห้ามเข้าเวรเช้าต่อจากเวรดึกของเมื่อวาน (ต้องพักอย่างน้อย 12 ชม.)" };
+            }
+        }
+
+        // --- 3. [ส่วนที่เพิ่มใหม่] ตรวจสอบชั่วโมงสะสมต่อสัปดาห์ (Overtime Check) ---
+        // หาช่วงวันจันทร์ - วันอาทิตย์ ของสัปดาห์ที่มี targetDate
+        const startOfWeek = moment(targetDate).startOf('isoWeek').format('YYYY-MM-DD');
+        const endOfWeek = moment(targetDate).endOf('isoWeek').format('YYYY-MM-DD');
+
+        // นับชั่วโมงรวม (สมมติเวรละ 8 ชั่วโมง)
+        const [hoursRes] = await dbPool.query(
+            `SELECT COUNT(*) * 8 as total_hours 
+             FROM NurseSchedule 
+             WHERE UserID = ? AND Nurse_Date BETWEEN ? AND ?`,
+            [userId, startOfWeek, endOfWeek]
+        );
+
+        const currentHours = hoursRes[0].total_hours || 0;
+        const maxHoursPerWeek = 48; 
+
+        if (currentHours + 8 > maxHoursPerWeek) {
+            return { 
+                safe: false, 
+                message: `ชั่วโมงทำงานสะสมในสัปดาห์นี้จะเกิน ${maxHoursPerWeek} ชม. (ปัจจุบันมี ${currentHours} ชม.)` 
+            };
+        }
+
+        return { safe: true };
+    } catch (err) {
+        console.error("Fatigue Check Error:", err);
+        return { safe: false, message: "เกิดข้อผิดพลาดในการตรวจสอบความปลอดภัย" };
+    }
 }
 
 // --- Security Middleware ---
@@ -201,16 +257,36 @@ app.post('/logout', async (req, res) => {
 //  API Update Profile Image (ใช้ Cloudinary URL)
 app.post('/api/update-profile-image', authenticateToken, upload.single('profileImage'), async (req, res) => {
     const userId = req.body.userId;
-    // Cloudinary จะเก็บ URL ไว้ใน req.file.path
     if (!userId || !req.file) return res.status(400).json({ success: false, message: "Missing data" });
 
     try {
-        // ใช้ path เต็ม (URL จาก Cloudinary)
-        const imagePath = req.file.path; 
-        await dbPool.query("UPDATE User SET ProfileImage = ? WHERE UserID = ?", [imagePath, userId]);
-        res.json({ success: true, message: "อัปโหลดสำเร็จ", imagePath: imagePath });
+        // 1. ดึงข้อมูลรูปภาพเดิมจากฐานข้อมูลก่อน
+        const [user] = await dbPool.query("SELECT ProfileImage FROM User WHERE UserID = ?", [userId]);
+        const oldImageUrl = user[0]?.ProfileImage;
+
+        // 2. ถ้ามีรูปเดิม และเป็นรูปจาก Cloudinary ให้สั่งลบ
+        if (oldImageUrl && oldImageUrl.includes('cloudinary')) {
+            const publicId = getPublicIdFromUrl(oldImageUrl);
+            if (publicId) {
+                // สั่งลบไฟล์ใน Cloudinary (ใช้ uploader.destroy)
+                await cloudinary.uploader.destroy(publicId);
+                console.log("Deleted old image from Cloudinary:", publicId);
+            }
+        }
+
+        // 3. บันทึก URL รูปใหม่ที่ Cloudinary เพิ่งสร้างให้ (req.file.path)
+        const newImagePath = req.file.path; 
+        await dbPool.query("UPDATE User SET ProfileImage = ? WHERE UserID = ?", [newImagePath, userId]);
+
+        res.json({ 
+            success: true, 
+            message: "อัปเดตรูปโปรไฟล์สำเร็จและลบรูปเก่าเรียบร้อย", 
+            imagePath: newImagePath 
+        });
+
     } catch (err) {
-        console.error(err); res.status(500).json({ success: false, message: err.message });
+        console.error("Update Image Error:", err);
+        res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัปโหลด" });
     }
 });
 
@@ -323,7 +399,7 @@ app.post('/api/admin/import-users', authenticateToken, uploadExcel.single('file'
                 const hashedPassword = await bcrypt.hash(rawPassword, 10);
                 const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
                 
-                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId, deptId]);
+                await dbPool.query(sql, [email, hashedPassword, firstName, lastName, roleId]);
 
                 const mailOptions = {
                     from: `"AUTONURSESHIFT" <${process.env.EMAIL_USER}>`,
@@ -512,14 +588,41 @@ app.post('/api/monthly-schedule', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
-app.post('/api/submit-constraint', authenticateToken, async (req, res) => {
-    const { userId, date, shiftId, reason } = req.body;
+app.post('/api/set-constraints', authenticateToken, async (req, res) => {
+    const { userId, settingPeriod, daysOffMinimum, fixedDaysOff, preferences } = req.body;
+    
     try {
-        const [exist] = await dbPool.query("SELECT * FROM NurseConstraint WHERE UserID = ? AND Constraint_Date = ? AND Shift_id = ?", [userId, date, shiftId]);
-        if (exist.length > 0) return res.status(409).json({ message: "ส่งไปแล้ว" });
-        await dbPool.query("INSERT INTO NurseConstraint (UserID, Constraint_Date, Shift_id, Reason) VALUES (?, ?, ?, ?)", [userId, date, shiftId, reason]);
-        res.json({ success: true, message: "บันทึกสำเร็จ" });
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
+        // บันทึกทุกอย่างลงตาราง Constraints (ชื่อตามรูป DB ของคุณ)
+        const sql = `
+            INSERT INTO Constraints (
+                UserID, SettingPeriod, DaysOffMin, FixedDaysOff, 
+                PrefMorning, PrefAfternoon, PrefNight, CreatedAt
+            ) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))
+            ON DUPLICATE KEY UPDATE 
+                DaysOffMin = VALUES(DaysOffMin), 
+                FixedDaysOff = VALUES(FixedDaysOff),
+                PrefMorning = VALUES(PrefMorning),
+                PrefAfternoon = VALUES(PrefAfternoon),
+                PrefNight = VALUES(PrefNight)
+        `;
+
+        await dbPool.query(sql, [
+            userId, 
+            settingPeriod, 
+            daysOffMinimum, 
+            JSON.stringify(fixedDaysOff), 
+            preferences.Morning, 
+            preferences.Afternoon, 
+            preferences.Night
+        ]);
+
+        res.json({ success: true, message: "บันทึกข้อจำกัดลงตาราง Constraints เรียบร้อยแล้ว" });
+
+    } catch (err) {
+        console.error("Database Save Error:", err);
+        res.status(500).json({ success: false, message: "Server Error: " + err.message });
+    }
 });
 
 app.post('/api/posts/create', authenticateToken, async (req, res) => {
@@ -605,56 +708,90 @@ app.post('/api/swaps/search', authenticateToken, async (req, res) => {
 
 app.post('/api/swaps/send-request', authenticateToken, async (req, res) => {
     try {
-        // รับค่า targetScheduleId (เวรเพื่อน) เพิ่มเข้ามา
         const { requesterId, requesterScheduleId, postId, targetScheduleId, reason } = req.body;
 
-        // 1. เช็คข้อมูลฝั่งคนขอ (ต้องมีเสมอ)
+        // 1. เช็คข้อมูลพื้นฐาน
         if (!requesterId || !requesterScheduleId) {
-            return res.status(400).json({ success: false, message: 'ข้อมูลฝั่งคนขอไม่ครบถ้วน (requesterId หรือ requesterScheduleId)' });
+            return res.status(400).json({ success: false, message: 'ข้อมูลฝั่งคนขอไม่ครบถ้วน' });
         }
 
         let responderId = null;
         let responderScheduleId = null;
 
-        // 2. กรณี A: แลกผ่านประกาศ (มี postId) - แบบเดิม
+        // 2. หาข้อมูลเวรปลายทาง (Responder)
         if (postId) {
             const [postData] = await dbPool.query("SELECT UserID, ScheduleID FROM ExchangePost WHERE ExchangePostID = ?", [postId]);
             if (postData.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบประกาศนี้' });
-            
             responderId = postData[0].UserID;
             responderScheduleId = postData[0].ScheduleID;
-        } 
-        // 3. กรณี B: แลกตรง (ไม่มี postId) - แบบใหม่ ⭐️
-        else if (targetScheduleId) {
-            // ไปค้นหาว่าเวรเป้าหมายนี้ เป็นของใคร?
+        } else if (targetScheduleId) {
             const [scheduleData] = await dbPool.query("SELECT UserID, ScheduleID FROM NurseSchedule WHERE ScheduleID = ?", [targetScheduleId]);
             if (scheduleData.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบเวรที่ต้องการแลก' });
-
             responderId = scheduleData[0].UserID;
             responderScheduleId = scheduleData[0].ScheduleID;
-
-            // ป้องกันการแลกเวรกับตัวเอง
-            if (responderId == requesterId) {
-                return res.status(400).json({ success: false, message: 'คุณจะแลกเวรกับตัวเองไม่ได้' });
-            }
-        } 
-        else {
-            // ถ้าไม่ส่งทั้ง postId และ targetScheduleId มาเลย
+        } else {
             return res.status(400).json({ success: false, message: 'ระบุข้อมูลไม่ครบ (ต้องมี postId หรือ targetScheduleId)' });
         }
 
-        // 4. เช็คว่าเคยขอไปหรือยัง (Logic เดิม)
+        if (responderId == requesterId) return res.status(400).json({ success: false, message: 'คุณจะแลกเวรกับตัวเองไม่ได้' });
+
+        // ==================================================================================
+        // 🛡️ SECURITY CHECK: ตรวจสอบกฎความปลอดภัย (Fatigue Rules) ก่อนอนุญาตให้ส่งคำขอ
+        // ==================================================================================
+        
+        // A. ดึงรายละเอียดเวรของทั้ง 2 ฝั่ง (วันที่ และ กะ)
+        const [reqShiftInfo] = await dbPool.query(
+            "SELECT Nurse_Date, Shift_id FROM NurseSchedule WHERE ScheduleID = ?", 
+            [requesterScheduleId]
+        );
+        const [resShiftInfo] = await dbPool.query(
+            "SELECT Nurse_Date, Shift_id FROM NurseSchedule WHERE ScheduleID = ?", 
+            [responderScheduleId]
+        );
+
+        if (reqShiftInfo.length === 0 || resShiftInfo.length === 0) {
+            return res.status(404).json({ success: false, message: "ไม่พบข้อมูลรายละเอียดเวร" });
+        }
+
+        const requesterShift = reqShiftInfo[0]; // เวรเดิมของคนขอ (กำลังจะโยนออก)
+        const responderShift = resShiftInfo[0]; // เวรใหม่ที่คนขอจะได้ (กำลังจะรับเข้า)
+
+        // B. เช็คความปลอดภัยของ "คนขอ" (Requester) ที่จะไปรับเวรใหม่
+        // "คนขอ" กำลังจะไปทำเวรในวันที่ของ Responder -> เช็คว่าปลอดภัยไหม?
+        const safetyRequester = await checkFatigueStatus(dbPool, requesterId, responderShift.Nurse_Date, responderShift.Shift_id);
+        if (!safetyRequester.safe) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `คุณไม่สามารถแลกเวรนี้ได้ (ผิดกฎความปลอดภัย): ${safetyRequester.message}` 
+            });
+        }
+
+        // C. เช็คความปลอดภัยของ "คนถูกขอ" (Responder) ที่จะต้องมารับเวรเรา
+        // "คนถูกขอ" ต้องมารับเวรในวันที่ของเรา -> เช็คว่าเขาไหวไหม?
+        const safetyResponder = await checkFatigueStatus(dbPool, responderId, requesterShift.Nurse_Date, requesterShift.Shift_id);
+        if (!safetyResponder.safe) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `ไม่สามารถส่งคำขอได้ เนื่องจากเพื่อนจะผิดกฎความปลอดภัย: ${safetyResponder.message}` 
+            });
+        }
+
+        // ==================================================================================
+        // สิ้นสุดการตรวจสอบ
+        // ==================================================================================
+
+        // 4. เช็คว่าเคยขอซ้ำไหม
         const [existing] = await dbPool.query(
             "SELECT exchange_id FROM Shift_Exchange WHERE requester_schedule_id = ? AND responder_schedule_id = ? AND status = 'pending'", 
             [requesterScheduleId, responderScheduleId]
         );
         if (existing.length > 0) return res.status(400).json({ success: false, message: 'คำขอนี้รอการอนุมัติอยู่แล้ว' });
 
-        // 5. บันทึกลง Database
+        // 5. บันทึก
         const sql = `INSERT INTO Shift_Exchange (requester_id, requester_schedule_id, responder_id, responder_schedule_id, status, reason, created_at) VALUES (?, ?, ?, ?, 'pending', ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
         await dbPool.query(sql, [requesterId, requesterScheduleId, responderId, responderScheduleId, reason]);
 
-        res.json({ success: true, message: 'ส่งคำขอเรียบร้อย รอเพื่อนหรือหัวหน้าอนุมัติ' });
+        res.json({ success: true, message: 'ส่งคำขอเรียบร้อย (ผ่านการตรวจสอบความปลอดภัยแล้ว)' });
 
     } catch (err) { 
         console.error(err); 
@@ -1035,14 +1172,32 @@ app.get('/api/market/shifts', authenticateToken, async (req, res) => {
 app.post('/api/market/request-trade', authenticateToken, async (req, res) => {
     const { userId, sellId } = req.body; 
     try {
-        const [posts] = await dbPool.query("SELECT UserID, ScheduleID, Price FROM PostSell WHERE PostSellID = ?", [sellId]);
+        // 1. ดึงข้อมูลประกาศขาย และข้อมูลเวร (วันที่/กะ) มาเพื่อเช็คความปลอดภัย
+        const [posts] = await dbPool.query(`
+            SELECT ps.UserID, ps.ScheduleID, ps.Price, ns.Nurse_Date, ns.Shift_id 
+            FROM PostSell ps
+            JOIN NurseSchedule ns ON ps.ScheduleID = ns.ScheduleID
+            WHERE ps.PostSellID = ?`, 
+            [sellId]
+        );
         if (posts.length === 0) return res.status(404).json({ success: false, message: "ไม่พบประกาศ" });
         const post = posts[0];
         if (post.UserID == userId) return res.status(400).json({ success: false, message: "ไม่สามารถขอซื้อเวรตัวเองได้" });
-        const sql = `INSERT INTO ShiftTransaction (PostSellID, SellerID, BuyerID, ScheduleID, Price, Status, CreatedAt) VALUES (?, ?, ?, ?, ?, 'Pending_Seller', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
+        // === ส่วนที่เพิ่ม: ตรวจสอบความปลอดภัย (Fatigue Check) ===
+        const fatigue = await checkFatigueStatus(dbPool, userId, post.Nurse_Date, post.Shift_id);
+        if (!fatigue.safe) {
+            return res.status(400).json({ success: false, message: fatigue.message });
+        }
+        // ===================================================
+        // 2. ถ้าผ่านการเช็ค ให้ทำการบันทึกคำขอซื้อเวร
+        const sql = `INSERT INTO ShiftTransaction (PostSellID, SellerID, BuyerID, ScheduleID, Price, Status, CreatedAt) 
+                     VALUES (?, ?, ?, ?, ?, 'Pending_Seller', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;
         await dbPool.query(sql, [sellId, post.UserID, userId, post.ScheduleID, post.Price]);
         res.json({ success: true, message: 'ส่งคำขอสำเร็จ รอเจ้าของเวรตอบรับ' });
-    } catch (err) { console.error("Trade Request Error:", err); res.status(500).json({ success: false, message: "Server Error" }); }
+    } catch (err) { 
+        console.error("Trade Request Error:", err); 
+        res.status(500).json({ success: false, message: "Server Error" }); 
+    }
 });
 
 app.get('/api/market/my-requests/:userId', authenticateToken, async (req, res) => {
@@ -1247,14 +1402,216 @@ app.get('/api/admin/check-submission-status', authenticateToken, async (req, res
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
+// =========================================================================
+// API: ระบบจัดเวรอัตโนมัติ (Full Intelligent Engine)
+// - กฎ 1: เมื่อวานดึก -> ห้ามวันนี้เช้า (Fatigue)
+// - กฎ 2: ห้ามควบ บ่าย+ดึก หรือ เกิน 2 เวร/วัน (Daily Limit)
+// - กฎ 3: ⭐️ ห้ามลงเวรดึกเกิน 2 ครั้ง/สัปดาห์ (Weekly Night Limit) ⭐️
+// - กฎ 4: เกลี่ยเวรดึกให้เท่าเทียม (Fairness Weighting)
+// - กฎ 5: ใช้คะแนนความพึงพอใจ 1-5 เป็นน้ำหนักในการสุ่ม (Preference Weight)
+// =========================================================================
+app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => {
+    // 1. ตรวจสอบสิทธิ์ (Admin Only)
+    if (req.user.roleId !== 1) {
+        return res.status(403).json({ success: false, message: "สิทธิ์ไม่ถูกต้อง: เฉพาะหัวหน้าพยาบาลเท่านั้น" });
+    }
+
+    const connection = await dbPool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 2. ดึงการตั้งค่าโควตาจาก SystemSettings
+        const [settings] = await connection.query("SELECT * FROM SystemSettings");
+        const getQuota = (key) => parseInt(settings.find(s => s.SettingKey === key)?.SettingValue || 0);
+        
+        const quotas = {
+            1: getQuota('QuotaMorning'),   // 1 = เช้า
+            2: getQuota('QuotaAfternoon'), // 2 = บ่าย
+            3: getQuota('QuotaNight')      // 3 = ดึก
+        };
+
+        // 3. เตรียมข้อมูลพยาบาลและข้อจำกัด (Constraints)
+        const [nurses] = await connection.query("SELECT UserID FROM User WHERE RoleID = 2 AND Status = 'active'");
+        const [allConstraints] = await connection.query("SELECT * FROM Constraints");
+
+        // 4. กำหนดช่วงเวลา (เดือนถัดไป)
+        const targetMonth = moment().add(1, 'month');
+        const daysInMonth = targetMonth.daysInMonth();
+        const yearMonth = targetMonth.format('YYYY-MM');
+
+        // ล้างเวรเก่าของเดือนนั้นทิ้งก่อน (Re-generate)
+        await connection.query("DELETE FROM NurseSchedule WHERE Nurse_Date LIKE ?", [`${yearMonth}%`]);
+
+        // 5. เตรียมข้อมูล "เวรดึกวันสุดท้ายของเดือนที่แล้ว" (เพื่อเช็คความต่อเนื่องวันที่ 1)
+        const lastMonthEnd = moment().endOf('month').format('YYYY-MM-DD');
+        const [prevMonthNightShifts] = await connection.query(
+            "SELECT UserID FROM NurseSchedule WHERE Nurse_Date = ? AND Shift_id = 3", 
+            [lastMonthEnd]
+        );
+        let blockedFromYesterdayNight = prevMonthNightShifts.map(row => row.UserID);
+
+        // 🟢 ตัวแปรติดตามยอดเวรดึกสะสมรายเดือน (เพื่อ Fairness: ใครทำน้อยให้โดนเยอะ)
+        const monthlyNightShiftCount = {}; 
+        nurses.forEach(n => monthlyNightShiftCount[n.UserID] = 0);
+
+        // 🔵 ตัวแปรติดตามยอดเวรดึกรายสัปดาห์ (กฎ: ห้ามเกิน 2 ครั้ง/สัปดาห์)
+        // Structure: { "UserID": { "WeekNum": Count } }
+        const weeklyNightShiftTracker = {};
+
+        // เก็บรายการวันที่คนไม่พอ (Report)
+        const incompleteShifts = [];
+
+        // ==========================================
+        // 🚀 เริ่มวนลูปจัดเวรรายวัน (Day 1 -> Day 30/31)
+        // ==========================================
+        for (let d = 1; d <= daysInMonth; d++) {
+            const currentDateStr = `${yearMonth}-${String(d).padStart(2, '0')}`;
+            const currentWeekNum = moment(currentDateStr).isoWeek(); // เลขสัปดาห์ของปี
+            const dailyAssignments = {}; // เก็บว่าวันนี้ใครได้เวรบ้าง
+
+            // ลำดับการจัด: ดึก(3) -> บ่าย(2) -> เช้า(1)
+            // (จัดดึกก่อนเสมอเพราะสำคัญสุดและมีเงื่อนไขเยอะสุด)
+            const shiftOrder = [3, 2, 1];
+
+            for (const shiftId of shiftOrder) {
+                const quotaNeeded = quotas[shiftId];
+                let assignedCount = 0;
+
+                // 1. คัดกรองคนที่มีสิทธิ์ลง (Candidate Pool)
+                const candidates = nurses.filter(nurse => {
+                    const uid = nurse.UserID;
+                    const myShiftsToday = dailyAssignments[uid] || [];
+
+                    // --- กฎความปลอดภัย (Safety & Fatigue) ---
+                    if (shiftId === 1 && blockedFromYesterdayNight.includes(uid)) return false; // เมื่อวานดึก วันนี้ห้ามเช้า
+                    if (myShiftsToday.length >= 2) return false; // ห้ามเกิน 2 เวร/วัน
+                    if (myShiftsToday.includes(shiftId)) return false; // ห้ามซ้ำกะเดิม
+                    if (shiftId === 3 && myShiftsToday.includes(2)) return false; // มีบ่าย ห้ามลงดึก
+                    if (shiftId === 2 && myShiftsToday.includes(3)) return false; // มีดึก ห้ามลงบ่าย
+
+                    // --- ⭐️ กฎใหม่: ห้ามเวรดึกเกิน 2 ครั้ง/สัปดาห์ ---
+                    if (shiftId === 3) {
+                        const myWeeklyRecord = weeklyNightShiftTracker[uid] || {};
+                        const currentWeekCount = myWeeklyRecord[currentWeekNum] || 0;
+                        if (currentWeekCount >= 2) return false; // ตัดสิทธิ์ถ้าครบ 2 แล้ว
+                    }
+
+                    // --- กฎวันหยุด (Fixed Day Off) ---
+                    const con = allConstraints.find(c => c.UserID === uid && moment(c.SettingPeriod).format('YYYY-MM') === yearMonth);
+                    if (con && con.FixedDaysOff) {
+                        try {
+                            if (JSON.parse(con.FixedDaysOff).includes(currentDateStr)) return false;
+                        } catch (e) {}
+                    }
+                    
+                    // --- คำนวณคะแนนพื้นฐาน (Preference 1-5) ---
+                    let baseScore = 3;
+                    if (con) {
+                        if (shiftId === 1) baseScore = con.PrefMorning || 3;
+                        if (shiftId === 2) baseScore = con.PrefAfternoon || 3;
+                        if (shiftId === 3) baseScore = con.PrefNight || 3;
+                    }
+                    nurse.tempWeight = baseScore;
+                    return true;
+                });
+
+                // 2. ⚖️ ปรับน้ำหนักสำหรับ "เวรดึก" (Fairness Logic)
+                // ยิ่งเคยลงดึกเยอะ น้ำหนักยิ่งน้อยลง (โอกาสโดนซ้ำน้อยลง)
+                if (shiftId === 3) {
+                    candidates.forEach(n => {
+                        const fairnessFactor = 10 / (1 + monthlyNightShiftCount[n.UserID]);
+                        n.tempWeight = n.tempWeight * fairnessFactor;
+                    });
+                }
+
+                // 3. สุ่มเลือกคนแบบถ่วงน้ำหนัก (Weighted Random)
+                for (let i = 0; i < quotaNeeded; i++) {
+                    if (candidates.length === 0) break;
+
+                    const totalWeight = candidates.reduce((sum, n) => sum + n.tempWeight, 0);
+                    let randomVal = Math.random() * totalWeight;
+                    let selectedIndex = -1;
+
+                    for (let k = 0; k < candidates.length; k++) {
+                        if (randomVal < candidates[k].tempWeight) {
+                            selectedIndex = k;
+                            break;
+                        }
+                        randomVal -= candidates[k].tempWeight;
+                    }
+                    if (selectedIndex === -1 && candidates.length > 0) selectedIndex = candidates.length - 1;
+
+                    if (selectedIndex !== -1) {
+                        const selectedNurse = candidates[selectedIndex];
+
+                        // บันทึกลง DB
+                        await connection.query(
+                            "INSERT INTO NurseSchedule (UserID, Nurse_Date, Shift_id) VALUES (?, ?, ?)",
+                            [selectedNurse.UserID, currentDateStr, shiftId]
+                        );
+
+                        // อัปเดตสถานะรายวัน
+                        if (!dailyAssignments[selectedNurse.UserID]) dailyAssignments[selectedNurse.UserID] = [];
+                        dailyAssignments[selectedNurse.UserID].push(shiftId);
+                        
+                        // ถ้าเป็นเวรดึก -> อัปเดตตัวนับต่างๆ
+                        if (shiftId === 3) {
+                            // 1. ยอดรายเดือน (เพื่อ Fairness Calculation)
+                            monthlyNightShiftCount[selectedNurse.UserID]++;
+                            
+                            // 2. ⭐️ ยอดรายสัปดาห์ (เพื่อ Weekly Limit Check)
+                            if (!weeklyNightShiftTracker[selectedNurse.UserID]) weeklyNightShiftTracker[selectedNurse.UserID] = {};
+                            const currentVal = weeklyNightShiftTracker[selectedNurse.UserID][currentWeekNum] || 0;
+                            weeklyNightShiftTracker[selectedNurse.UserID][currentWeekNum] = currentVal + 1;
+                        }
+
+                        // เอาคนที่ได้แล้วออกจาก Candidate ของกะนี้
+                        candidates.splice(selectedIndex, 1);
+                        assignedCount++;
+                    }
+                }
+
+                // แจ้งเตือนถ้าคนไม่พอ (Incomplete Report)
+                if (assignedCount < quotaNeeded) {
+                    incompleteShifts.push({
+                        date: currentDateStr,
+                        shift: (shiftId === 1 ? 'เช้า' : shiftId === 2 ? 'บ่าย' : 'ดึก'),
+                        wanted: quotaNeeded,
+                        got: assignedCount
+                    });
+                }
+
+            } // จบ Loop Shift
+
+            // เตรียมข้อมูล Block สำหรับวันพรุ่งนี้ (ใครลงดึกวันนี้ พรุ่งนี้เช้าห้ามลง)
+            const [todayNightShifts] = await connection.query(
+                "SELECT UserID FROM NurseSchedule WHERE Nurse_Date = ? AND Shift_id = 3",
+                [currentDateStr]
+            );
+            blockedFromYesterdayNight = todayNightShifts.map(row => row.UserID);
+
+        } // จบ Loop Day
+
+        await connection.commit();
+        res.json({ 
+            success: true, 
+            message: incompleteShifts.length > 0 
+                ? `จัดเวรเสร็จสิ้น แต่มี ${incompleteShifts.length} กะที่คนไม่พอ (ระบบพยายามเกลี่ยให้ดีที่สุดแล้ว)` 
+                : `จัดตารางเวรเดือน ${targetMonth.format('MMMM YYYY')} สมบูรณ์แบบ!`,
+            incompleteShifts: incompleteShifts
+        });
+
+    } catch (err) {
+        await connection.rollback();
+        console.error("Scheduling Error:", err);
+        res.status(500).json({ success: false, message: "Error: " + err.message });
+    } finally {
+        connection.release();
+    }
+});
 // ==========================================
 // 8. SERVER EXPORT (สำคัญสำหรับ Vercel)
 // ถ้า Run บนเครื่องตัวเอง (Local) ให้ start port
-if (require.main === module) {
-    app.listen(port, () => {
-        console.log(`🚀 Server running locally at http://localhost:${port}/`);
-    });
-}
-
-// ส่งออก app เพื่อให้ Vercel นำไปทำเป็น Serverless Function
-module.exports = app;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
