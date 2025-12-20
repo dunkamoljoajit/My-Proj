@@ -624,7 +624,6 @@
                         timer: 1500,
                         showConfirmButton: false
                     }).then(() => {
-                        // 🔴🔴🔴 Redirect ไปที่หน้าแลกเวร (อย่าลืมเปลี่ยน swap_market.html เป็นชื่อไฟล์จริงของคุณ) 🔴🔴🔴
                         window.location.href = 'swap_request.html';
                     });
                 } else { Swal.fire('เกิดข้อผิดพลาด', data.message, 'error'); }
