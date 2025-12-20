@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สร้างตารางเวรอัตโนมัติ</title>
+    
+    <link href="css/style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
+    
+    <script src="lib/sweetalert2.js"></script>
+    <script src="lib/moment.js"></script>
+    <script src="components.js"></script>
+</head>
+<body class="bg-gray-50 font-sans flex flex-col h-screen">
+
+    <app-header></app-header>
+
+    <main class="flex-1 overflow-y-auto pb-24">
+        <div class="max-w-4xl mx-auto p-6 space-y-8">
+            
+            <div class="text-center space-y-2 mt-8">
+                <div class="w-20 h-20 bg-gradient-to-tr from-fuchsia-600 to-pink-500 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-fuchsia-200">
+                    <i class="fas fa-robot text-4xl text-white"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800">ระบบจัดเวรอัจฉริยะ</h1>
+                <p class="text-gray-500">ประมวลผลตามกฎความปลอดภัยและความต้องการของพยาบาล</p>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 relative overflow-hidden">
+                <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-fuchsia-50 rounded-full blur-3xl opacity-50"></div>
+                
+                <div class="relative z-10 text-center space-y-6">
+                    <div class="inline-block px-4 py-2 bg-fuchsia-50 text-fuchsia-600 rounded-full text-sm font-bold border border-fuchsia-100">
+                        <i class="far fa-calendar-alt mr-2"></i>
+                        รอบการจัดเวร: <span id="target-month-display">...</span>
+                    </div>
+
+                    <div id="existing-warning" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 max-w-md mx-auto flex items-center gap-3">
+                        <i class="fas fa-exclamation-triangle text-amber-500 text-xl"></i>
+                        <div class="text-left">
+                            <p class="text-sm font-bold text-amber-700">พบตารางเวรของเดือนนี้แล้ว</p>
+                            <p class="text-xs text-amber-600">การกดประมวลผลใหม่จะ <span class="underline">ลบข้อมูลเดิมทั้งหมด</span> และสร้างใหม่</p>
+                        </div>
+                    </div>
+
+                    <div id="action-area">
+                        <button id="btn-start-generate" class="group relative w-full md:w-2/3 mx-auto bg-gray-900 text-white p-4 rounded-2xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+                            <div class="absolute inset-0 bg-gradient-to-r from-fuchsia-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                            <div class="relative flex items-center justify-center gap-3">
+                                <i id="btn-icon" class="fas fa-bolt text-xl text-yellow-300 animate-pulse"></i>
+                                <span id="btn-text" class="text-lg font-bold">เริ่มประมวลผลจัดเวร</span>
+                            </div>
+                        </button>
+                        <p class="text-xs text-gray-400 mt-4">ระบบจะคำนวณเวรให้พยาบาลทุกคนอย่างเป็นธรรม</p>
+                    </div>
+
+                    <div id="loading-area" class="hidden space-y-4">
+                        <div class="w-16 h-16 border-4 border-fuchsia-200 border-t-fuchsia-600 rounded-full animate-spin mx-auto"></div>
+                        <div class="space-y-1">
+                            <h3 class="text-lg font-bold text-gray-800 animate-pulse">กำลังประมวลผล...</h3>
+                            <p class="text-sm text-gray-500" id="loading-step">กำลังวิเคราะห์กฎความปลอดภัย</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="result-section" class="hidden space-y-6">
+                <div class="flex items-center gap-4">
+                    <div class="h-px bg-gray-200 flex-1"></div>
+                    <span class="text-gray-400 text-sm font-medium">ผลลัพธ์การจัดเวร</span>
+                    <div class="h-px bg-gray-200 flex-1"></div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl flex items-center gap-4">
+                        <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-emerald-800">จัดเวรสำเร็จ</h4>
+                            <p class="text-xs text-emerald-600">เวรส่วนใหญ่ถูกจัดสรรเรียบร้อย</p>
+                        </div>
+                    </div>
+
+                    <div id="incomplete-card" class="bg-rose-50 border border-rose-100 p-5 rounded-2xl flex items-center gap-4 hidden">
+                        <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-rose-800">เวรไม่ครบ <span id="missing-count">0</span> กะ</h4>
+                            <p class="text-xs text-rose-600">โปรดตรวจสอบและจัดการด้วยตนเอง</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="missing-list-container" class="hidden">
+                    <h3 class="text-sm font-bold text-gray-500 mb-3 ml-2">รายการวันที่คนไม่พอ:</h3>
+                    <div id="missing-list" class="space-y-2"></div>
+                </div>
+
+                <div class="flex gap-4 pt-4">
+                    <a href="Headnurse_dashboard.html" class="flex-1 bg-white border border-gray-200 text-gray-600 py-3 rounded-xl text-center font-bold hover:bg-gray-50 transition">
+                        กลับหน้าหลัก
+                    </a>
+                    <a href="schedule.html" class="flex-1 bg-violet-600 text-white py-3 rounded-xl text-center font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 transition">
+                        ดูตารางเวรที่ได้
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <app-navbar></app-navbar>
+
+    <script>
+        const API_URL = (typeof API_BASE !== 'undefined') ? API_BASE : 'http://localhost:3000';
+        let existingScheduleFound = false; // ตัวแปรเก็บสถานะว่ามีเวรเดิมไหม
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. ตรวจสอบสิทธิ์
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.RoleID !== 1) {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+
+            // 2. แสดงเดือนเป้าหมาย
+            if (typeof moment !== 'undefined') {
+                const nextMonth = moment().add(1, 'month');
+                document.getElementById('target-month-display').innerText = nextMonth.format('MMMM YYYY');
+                
+                // 3. ✅ ตรวจสอบว่าเดือนนี้เคยจัดเวรไปหรือยัง?
+                await checkExistingSchedule(nextMonth.month() + 1, nextMonth.year());
+            }
+
+            document.getElementById('btn-start-generate').addEventListener('click', handleGenerateClick);
+        });
+
+        // ฟังก์ชันเช็คว่ามีตารางเวรอยู่แล้วหรือไม่
+        async function checkExistingSchedule(month, year) {
+            try {
+                const token = localStorage.getItem('authToken');
+                // ใช้ API full-schedule เพื่อเช็คว่ามีข้อมูลไหม
+                const res = await fetch(`${API_URL}/api/full-schedule`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ month, year })
+                });
+                const data = await res.json();
+
+                if (data.success && data.shifts && data.shifts.length > 0) {
+                    existingScheduleFound = true;
+                    
+                    // ปรับ UI ให้รู้ว่าเป็นการ "ทำใหม่"
+                    document.getElementById('existing-warning').classList.remove('hidden');
+                    document.getElementById('btn-text').innerText = "ประมวลผลใหม่ (ล้างข้อมูลเดิม)";
+                    document.getElementById('btn-icon').className = "fas fa-sync-alt text-xl text-white animate-spin-slow"; // เปลี่ยนไอคอน
+                    
+                    // เปลี่ยนสีปุ่มเป็นโทนส้ม/แดง เพื่อเตือน
+                    const btn = document.getElementById('btn-start-generate');
+                    btn.className = "group relative w-full md:w-2/3 mx-auto bg-amber-600 text-white p-4 rounded-2xl shadow-xl hover:bg-amber-700 transition-all duration-300 overflow-hidden";
+                }
+            } catch (err) {
+                console.error("Check schedule error:", err);
+            }
+        }
+
+        async function handleGenerateClick() {
+            // ถ้ามีข้อมูลอยู่แล้ว ให้ถามยืนยันก่อน
+            if (existingScheduleFound) {
+                const result = await Swal.fire({
+                    title: 'ยืนยันการจัดเวรใหม่?',
+                    text: "ระบบตรวจพบตารางเวรของเดือนนี้อยู่แล้ว การดำเนินการนี้จะลบตารางเดิมทิ้งทั้งหมดและสร้างใหม่",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'ใช่, ล้างและสร้างใหม่',
+                    cancelButtonText: 'ยกเลิก'
+                });
+
+                if (!result.isConfirmed) return;
+            }
+
+            startGeneration();
+        }
+
+        async function startGeneration() {
+            // UI Transition
+            const btnArea = document.getElementById('action-area');
+            const loadArea = document.getElementById('loading-area');
+            const resultSec = document.getElementById('result-section');
+            const stepText = document.getElementById('loading-step');
+            const warningBox = document.getElementById('existing-warning');
+
+            btnArea.classList.add('hidden');
+            if(warningBox) warningBox.classList.add('hidden');
+            resultSec.classList.add('hidden');
+            loadArea.classList.remove('hidden');
+
+            // Simulate Steps
+            const steps = [
+                "กำลังโหลดข้อมูลพยาบาล...",
+                "วิเคราะห์ข้อจำกัด (Constraints)...",
+                "ตรวจสอบกฎความปลอดภัย (Fatigue Rules)...",
+                "เกลี่ยเวรให้เป็นธรรม...",
+                "กำลังบันทึกข้อมูลลงฐานข้อมูล..."
+            ];
+
+            for (let i = 0; i < steps.length; i++) {
+                stepText.innerText = steps[i];
+                await new Promise(r => setTimeout(r, 800));
+            }
+
+            // Call Real API
+            try {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`${API_URL}/api/admin/generate-schedule`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                loadArea.classList.add('hidden');
+                resultSec.classList.remove('hidden');
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'เสร็จสิ้น!',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    // Handle Incomplete Shifts
+                    const incomplete = data.incompleteShifts || [];
+                    const missingCard = document.getElementById('incomplete-card');
+                    const missingListCont = document.getElementById('missing-list-container');
+                    const missingList = document.getElementById('missing-list');
+
+                    if (incomplete.length > 0) {
+                        missingCard.classList.remove('hidden');
+                        document.getElementById('missing-count').innerText = incomplete.length;
+                        
+                        missingListCont.classList.remove('hidden');
+                        missingList.innerHTML = incomplete.map(item => `
+                            <div class="bg-white p-3 rounded-lg border-l-4 border-rose-400 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold text-gray-700">${moment(item.date).format('D MMM')}</span>
+                                    <span class="text-sm text-gray-500 ml-2">กะ${item.shift}</span>
+                                </div>
+                                <span class="text-xs bg-rose-100 text-rose-600 px-2 py-1 rounded-full font-bold">
+                                    ขาด ${item.wanted - item.got} คน
+                                </span>
+                            </div>
+                        `).join('');
+                    } else {
+                        missingCard.classList.add('hidden');
+                        missingListCont.classList.add('hidden');
+                    }
+
+                } else {
+                    throw new Error(data.message);
+                }
+
+            } catch (err) {
+                console.error(err);
+                loadArea.classList.add('hidden');
+                btnArea.classList.remove('hidden');
+                Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

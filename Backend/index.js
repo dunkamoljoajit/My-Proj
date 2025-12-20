@@ -117,18 +117,34 @@ function getThaiTimeInMySQLFormat(addMinutes = 0) {
     if (addMinutes > 0) now.setMinutes(now.getMinutes() + addMinutes);
     return now.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace('T', ' ');
 }
-async function checkFatigueStatus(dbPool, userId, targetDate, targetShiftId) {
+async function checkFatigueStatus(dbPool, userId, targetDate, targetShiftId, options = {}) {
     try {
-        // --- 1. ตรวจสอบเวรซ้อนในวันเดียวกัน ---
+        const { ignoreWeeklyLimit = false } = options;
+        // 1. ตรวจสอบเวรใน "วันเดียวกัน" (Daily Checks)
         const [existing] = await dbPool.query(
-            "SELECT S.ShiftName FROM NurseSchedule NS JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE NS.UserID = ? AND NS.Nurse_Date = ?", 
+            "SELECT NS.Shift_id, S.ShiftName FROM NurseSchedule NS JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE NS.UserID = ? AND NS.Nurse_Date = ?", 
             [userId, targetDate]
         );
-        if (existing.length > 0) {
-            return { safe: false, message: `ไม่สามารถรับเวรเพิ่มได้ เนื่องจากคุณมีเวร ${existing[0].ShiftName} ในวันที่นี้อยู่แล้ว` };
+        // วนลูปเช็คเวรเดิมที่มีอยู่ในวันนี้
+        for (const row of existing) {
+            const existingShiftId = row.Shift_id;
+            // กฎ: ห้ามลงเวรซ้ำกะเดิม (เช่น มีเช้าแล้ว จะรับเช้าอีกไม่ได้)
+            if (existingShiftId == targetShiftId) {
+                return { safe: false, message: `คุณมีเวร ${row.ShiftName} ในวันนี้อยู่แล้ว` };
+            }
+            // กฎ: ห้ามควบ "บ่าย(2) + ดึก(3)" (อันตรายเกินไป ร่างกายไม่ได้พัก)
+            // เช็คทั้งขาไปและขากลับ
+            if ((targetShiftId == 2 && existingShiftId == 3) || (targetShiftId == 3 && existingShiftId == 2)) {
+                return { safe: false, message: "อันตราย: ห้ามควงเวร บ่าย-ต่อ-ดึก" };
+            }
+            
+            // ✅ หมายเหตุ: ไม่มีโค้ดห้าม เช้า(1)+บ่าย(2) แล้ว -> แปลว่าทำได้
         }
-
-        // --- 2. ตรวจสอบกฎ "ดึก-ต่อ-เช้า" (พักผ่อนไม่เพียงพอ) ---
+        // กฎ: ห้ามเกิน 2 เวรใน 1 วัน (ป้องกันการควง 3 กะ เช้า-บ่าย-ดึก)
+        if (existing.length >= 2) {
+             return { safe: false, message: "คุณมี 2 เวรในวันนี้แล้ว ไม่สามารถรับเพิ่มได้" };
+        }
+        // 2. ตรวจสอบกฎ "ข้ามวัน" (ดึกเมื่อวาน -> ห้ามเช้าวันนี้)
         if (targetShiftId == 1) { // 1 = เวรเช้า
             const [prevNight] = await dbPool.query(
                 "SELECT * FROM NurseSchedule WHERE UserID = ? AND Nurse_Date = DATE_SUB(?, INTERVAL 1 DAY) AND Shift_id = 3", 
@@ -138,37 +154,39 @@ async function checkFatigueStatus(dbPool, userId, targetDate, targetShiftId) {
                 return { safe: false, message: "ผิดกฎความปลอดภัย: ห้ามเข้าเวรเช้าต่อจากเวรดึกของเมื่อวาน (ต้องพักอย่างน้อย 12 ชม.)" };
             }
         }
+        // 3. ตรวจสอบโควตา "รายสัปดาห์" (Max 7 Shifts / Week)
+        // ถ้า ignoreWeeklyLimit เป็น true (เช่น ตอนซื้อขายเวร) เราจะข้ามบล็อกนี้ไปเลย
+        if (!ignoreWeeklyLimit) { 
+            const startOfWeek = moment(targetDate).startOf('isoWeek').format('YYYY-MM-DD');
+            const endOfWeek = moment(targetDate).endOf('isoWeek').format('YYYY-MM-DD');
 
-        // --- 3. [ส่วนที่เพิ่มใหม่] ตรวจสอบชั่วโมงสะสมต่อสัปดาห์ (Overtime Check) ---
-        // หาช่วงวันจันทร์ - วันอาทิตย์ ของสัปดาห์ที่มี targetDate
-        const startOfWeek = moment(targetDate).startOf('isoWeek').format('YYYY-MM-DD');
-        const endOfWeek = moment(targetDate).endOf('isoWeek').format('YYYY-MM-DD');
+            // นับจำนวนเวรที่มีอยู่แล้วในสัปดาห์นั้น
+            const [countRes] = await dbPool.query(
+                `SELECT COUNT(*) as total_shifts 
+                 FROM NurseSchedule 
+                 WHERE UserID = ? AND Nurse_Date BETWEEN ? AND ?`,
+                [userId, startOfWeek, endOfWeek]
+            );
 
-        // นับชั่วโมงรวม (สมมติเวรละ 8 ชั่วโมง)
-        const [hoursRes] = await dbPool.query(
-            `SELECT COUNT(*) * 8 as total_hours 
-             FROM NurseSchedule 
-             WHERE UserID = ? AND Nurse_Date BETWEEN ? AND ?`,
-            [userId, startOfWeek, endOfWeek]
-        );
-
-        const currentHours = hoursRes[0].total_hours || 0;
-        const maxHoursPerWeek = 48; 
-
-        if (currentHours + 8 > maxHoursPerWeek) {
-            return { 
-                safe: false, 
-                message: `ชั่วโมงทำงานสะสมในสัปดาห์นี้จะเกิน ${maxHoursPerWeek} ชม. (ปัจจุบันมี ${currentHours} ชม.)` 
-            };
+            const currentShifts = countRes[0].total_shifts || 0;
+            
+            // ถ้าตอนนี้มี 7 เวรแล้ว รับเพิ่มอีก 1 จะเป็น 8 -> ห้าม
+            if (currentShifts >= 7) {
+                return { 
+                    safe: false, 
+                    message: `คุณทำงานครบ 7 เวร (56 ชม.) ในสัปดาห์นี้แล้ว` 
+                };
+            }
         }
 
+        // ผ่านทุกด่าน
         return { safe: true };
+
     } catch (err) {
         console.error("Fatigue Check Error:", err);
         return { safe: false, message: "เกิดข้อผิดพลาดในการตรวจสอบความปลอดภัย" };
     }
 }
-
 // --- Security Middleware ---
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -181,11 +199,7 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
-
-// ==========================================
 // 5. API ROUTES
-// ==========================================
-
 // Get Roles
 app.get('/api/roles', async (req, res) => {
     try {
@@ -238,17 +252,15 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Logout
+// Logout
 app.post('/logout', async (req, res) => {
     const userId = req.body.userId;
     console.log("--> Logout Request Received:", userId);
 
     try {
-        const [result] = await dbPool.query(
-            "UPDATE User SET Status = 'inactive' WHERE UserID = ?", 
-            [userId]
-        );
-        res.clearCookie('token');
+        res.clearCookie('token'); 
         res.json({ message: "Logged out successfully" });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -321,25 +333,59 @@ app.post('/api/forgot-password', async (req, res) => {
 
 // Verify OTP
 app.post("/verify-otp", async (req, res) => {
+    // รับค่าจากหน้าบ้าน (Frontend ส่งมาเป็น key: email, otp)
     const { email, otp } = req.body;
+
     try {
+        // 1. หา UserID จากอีเมล
         const [users] = await dbPool.query("SELECT UserID FROM User WHERE Email = ?", [email]);
-        if (users.length === 0) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
-
-        const [otps] = await dbPool.query("SELECT * FROM Password_reset_otp WHERE UserID = ? ORDER BY otp_id DESC LIMIT 1", [users[0].UserID]);
-        if (otps.length === 0) return res.status(400).json({ success: false, message: "ขอ OTP ใหม่" });
-
-        const otpData = otps[0];
-        if (otpData.otp_code !== otp || otpData.is_used === 1) return res.status(400).json({ success: false, message: "OTP ไม่ถูกต้อง" });
-        
-        if (getThaiTimeInMySQLFormat(0) > new Date(otpData.expires_at).toLocaleString('sv-SE')) {
-            return res.status(400).json({ success: false, message: "OTP หมดอายุ" });
+        if (users.length === 0) {
+            return res.status(404).json({ success: false, message: "ไม่พบอีเมลผู้ใช้งานในระบบ" });
         }
 
-        res.json({ success: true, message: "OTP ถูกต้อง" });
-    } catch (err) { res.status(500).json({ success: false, message: "Server Error" }); }
-});
+        const userId = users[0].UserID;
 
+        // 2. ดึง OTP ล่าสุดที่ยังไม่หมดอายุของ User คนนี้
+        const [otps] = await dbPool.query(
+            "SELECT * FROM Password_reset_otp WHERE UserID = ? ORDER BY otp_id DESC LIMIT 1", 
+            [userId]
+        );
+
+        if (otps.length === 0) {
+            return res.status(400).json({ success: false, message: "ไม่พบข้อมูลการขอ OTP กรุณากดขอรหัสใหม่" });
+        }
+
+        const otpData = otps[0];
+
+        // --- [จุดที่แก้ไข] ---
+        // แปลงเป็น String ทั้งคู่ก่อนเทียบ เพื่อแก้ปัญหาหน้าบ้านส่ง "368329" (String) แต่ DB เก็บ 368329 (Int)
+        // และเช็คว่าถูกใช้งานไปแล้วหรือยัง
+        if (String(otpData.otp_code) !== String(otp)) {
+            return res.status(400).json({ success: false, message: "รหัส OTP ไม่ถูกต้อง" });
+        }
+
+        if (otpData.is_used === 1) {
+             return res.status(400).json({ success: false, message: "รหัส OTP นี้ถูกใช้งานไปแล้ว" });
+        }
+        
+        // 3. เช็ควันหมดอายุ
+        // (สมมติว่า function getThaiTimeInMySQLFormat ทำงานถูกต้องอยู่แล้ว)
+        // เปรียบเทียบเวลาปัจจุบัน กับ เวลาหมดอายุใน DB
+        const currentTime = getThaiTimeInMySQLFormat(0); 
+        const expireTime = new Date(otpData.expires_at).toLocaleString('sv-SE'); // จัด Format ให้ตรงกันเพื่อเทียบ string
+
+        if (currentTime > expireTime) {
+            return res.status(400).json({ success: false, message: "รหัส OTP หมดอายุแล้ว" });
+        }
+
+        // ถ้าผ่านทุกด่าน
+        res.json({ success: true, message: "OTP ถูกต้อง ยืนยันตัวตนสำเร็จ" });
+
+    } catch (err) { 
+        console.error("Verify OTP Error:", err);
+        res.status(500).json({ success: false, message: "Server Error: ไม่สามารถตรวจสอบข้อมูลได้" }); 
+    }
+});
 // Reset Password
 app.post("/api/reset-password", async (req, res) => {
     const { email, newPassword, otp } = req.body;
@@ -592,29 +638,37 @@ app.post('/api/set-constraints', authenticateToken, async (req, res) => {
     const { userId, settingPeriod, daysOffMinimum, fixedDaysOff, preferences } = req.body;
     
     try {
-        // บันทึกทุกอย่างลงตาราง Constraints (ชื่อตามรูป DB ของคุณ)
+        // 1. แปลง Array วันหยุด เป็น String
+        const fixedDaysString = Array.isArray(fixedDaysOff) ? JSON.stringify(fixedDaysOff) : fixedDaysOff;
+
+        // 2. SQL: เพิ่มคอลัมน์ Reason เข้าไปในคำสั่ง INSERT
         const sql = `
             INSERT INTO Constraints (
-                UserID, SettingPeriod, DaysOffMin, FixedDaysOff, 
-                PrefMorning, PrefAfternoon, PrefNight, CreatedAt
+                UserID, SettingPeriod, Constraint_Date, DaysOffMin, FixedDaysOff, 
+                PrefMorning, PrefAfternoon, PrefNight, Reason, CreatedAt
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 HOUR))
             ON DUPLICATE KEY UPDATE 
+                Constraint_Date = VALUES(Constraint_Date),
                 DaysOffMin = VALUES(DaysOffMin), 
                 FixedDaysOff = VALUES(FixedDaysOff),
                 PrefMorning = VALUES(PrefMorning),
                 PrefAfternoon = VALUES(PrefAfternoon),
-                PrefNight = VALUES(PrefNight)
+                PrefNight = VALUES(PrefNight),
+                Reason = VALUES(Reason)
         `;
 
+        // 3. ส่งค่า 'User Preference' ไปใส่ในช่อง Reason เพื่อกัน Error
         await dbPool.query(sql, [
             userId, 
             settingPeriod, 
+            settingPeriod, 
             daysOffMinimum, 
-            JSON.stringify(fixedDaysOff), 
+            fixedDaysString, 
             preferences.Morning, 
             preferences.Afternoon, 
-            preferences.Night
+            preferences.Night,
+            'User Preference' // 👈 ค่าสำหรับช่อง Reason (ใส่ไว้กัน Error)
         ]);
 
         res.json({ success: true, message: "บันทึกข้อจำกัดลงตาราง Constraints เรียบร้อยแล้ว" });
@@ -624,7 +678,6 @@ app.post('/api/set-constraints', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error: " + err.message });
     }
 });
-
 app.post('/api/posts/create', authenticateToken, async (req, res) => {
     try {
         const { userId, scheduleId, desiredDate, note } = req.body;
@@ -1431,7 +1484,9 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
         };
 
         // 3. เตรียมข้อมูลพยาบาลและข้อจำกัด (Constraints)
-        const [nurses] = await connection.query("SELECT UserID FROM User WHERE RoleID = 2 AND Status = 'active'");
+        // ✅ [แก้ไข] : ดึงทั้ง RoleID 1 (หัวหน้า) และ 2 (พยาบาล)
+        const [nurses] = await connection.query("SELECT UserID FROM User WHERE RoleID IN (1, 2) AND Status = 'active'");
+        
         const [allConstraints] = await connection.query("SELECT * FROM Constraints");
 
         // 4. กำหนดช่วงเวลา (เดือนถัดไป)
@@ -1455,7 +1510,6 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
         nurses.forEach(n => monthlyNightShiftCount[n.UserID] = 0);
 
         // 🔵 ตัวแปรติดตามยอดเวรดึกรายสัปดาห์ (กฎ: ห้ามเกิน 2 ครั้ง/สัปดาห์)
-        // Structure: { "UserID": { "WeekNum": Count } }
         const weeklyNightShiftTracker = {};
 
         // เก็บรายการวันที่คนไม่พอ (Report)
@@ -1470,7 +1524,6 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
             const dailyAssignments = {}; // เก็บว่าวันนี้ใครได้เวรบ้าง
 
             // ลำดับการจัด: ดึก(3) -> บ่าย(2) -> เช้า(1)
-            // (จัดดึกก่อนเสมอเพราะสำคัญสุดและมีเงื่อนไขเยอะสุด)
             const shiftOrder = [3, 2, 1];
 
             for (const shiftId of shiftOrder) {
@@ -1500,7 +1553,9 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
                     const con = allConstraints.find(c => c.UserID === uid && moment(c.SettingPeriod).format('YYYY-MM') === yearMonth);
                     if (con && con.FixedDaysOff) {
                         try {
-                            if (JSON.parse(con.FixedDaysOff).includes(currentDateStr)) return false;
+                            // รองรับทั้ง Array และ String JSON
+                            const fixedOff = typeof con.FixedDaysOff === 'string' ? JSON.parse(con.FixedDaysOff) : con.FixedDaysOff;
+                            if (fixedOff.includes(currentDateStr)) return false;
                         } catch (e) {}
                     }
                     
@@ -1516,7 +1571,6 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
                 });
 
                 // 2. ⚖️ ปรับน้ำหนักสำหรับ "เวรดึก" (Fairness Logic)
-                // ยิ่งเคยลงดึกเยอะ น้ำหนักยิ่งน้อยลง (โอกาสโดนซ้ำน้อยลง)
                 if (shiftId === 3) {
                     candidates.forEach(n => {
                         const fairnessFactor = 10 / (1 + monthlyNightShiftCount[n.UserID]);
@@ -1556,10 +1610,10 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
                         
                         // ถ้าเป็นเวรดึก -> อัปเดตตัวนับต่างๆ
                         if (shiftId === 3) {
-                            // 1. ยอดรายเดือน (เพื่อ Fairness Calculation)
+                            // 1. ยอดรายเดือน
                             monthlyNightShiftCount[selectedNurse.UserID]++;
                             
-                            // 2. ⭐️ ยอดรายสัปดาห์ (เพื่อ Weekly Limit Check)
+                            // 2. ยอดรายสัปดาห์
                             if (!weeklyNightShiftTracker[selectedNurse.UserID]) weeklyNightShiftTracker[selectedNurse.UserID] = {};
                             const currentVal = weeklyNightShiftTracker[selectedNurse.UserID][currentWeekNum] || 0;
                             weeklyNightShiftTracker[selectedNurse.UserID][currentWeekNum] = currentVal + 1;
@@ -1571,7 +1625,7 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
                     }
                 }
 
-                // แจ้งเตือนถ้าคนไม่พอ (Incomplete Report)
+                // แจ้งเตือนถ้าคนไม่พอ
                 if (assignedCount < quotaNeeded) {
                     incompleteShifts.push({
                         date: currentDateStr,
@@ -1583,7 +1637,7 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
 
             } // จบ Loop Shift
 
-            // เตรียมข้อมูล Block สำหรับวันพรุ่งนี้ (ใครลงดึกวันนี้ พรุ่งนี้เช้าห้ามลง)
+            // เตรียมข้อมูล Block สำหรับวันพรุ่งนี้
             const [todayNightShifts] = await connection.query(
                 "SELECT UserID FROM NurseSchedule WHERE Nurse_Date = ? AND Shift_id = 3",
                 [currentDateStr]
@@ -1596,7 +1650,7 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
         res.json({ 
             success: true, 
             message: incompleteShifts.length > 0 
-                ? `จัดเวรเสร็จสิ้น แต่มี ${incompleteShifts.length} กะที่คนไม่พอ (ระบบพยายามเกลี่ยให้ดีที่สุดแล้ว)` 
+                ? `จัดเวรเสร็จสิ้น แต่มี ${incompleteShifts.length} กะที่คนไม่พอ` 
                 : `จัดตารางเวรเดือน ${targetMonth.format('MMMM YYYY')} สมบูรณ์แบบ!`,
             incompleteShifts: incompleteShifts
         });
@@ -1609,9 +1663,62 @@ app.post('/api/admin/generate-schedule', authenticateToken, async (req, res) => 
         connection.release();
     }
 });
-// ==========================================
-// 8. SERVER EXPORT (สำคัญสำหรับ Vercel)
-// ถ้า Run บนเครื่องตัวเอง (Local) ให้ start port
+// ✅ API ดึงสถานะการส่งข้อจำกัด (สำหรับแสดงบน Dashboard)
+app.get('/api/constraint-status', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // 1. คำนวณรอบเดือนถัดไป (ให้ตรงกับตอนบันทึก)
+        // เช่น วันนี้ 20 ธ.ค. -> รอบถัดไปคือ 2026-01-01
+        const nextMonthStr = moment().add(1, 'month').startOf('month').format('YYYY-MM-DD');
+
+        // 2. นับจำนวนพยาบาลทั้งหมด (Active)
+        // (นับ Role 1 และ 2 เพราะหัวหน้าก็ต้องส่ง)
+        const [totalRes] = await dbPool.query("SELECT COUNT(*) as count FROM User WHERE RoleID IN (1, 2) AND Status = 'active'");
+        const totalNurses = totalRes[0].count;
+
+        // 3. นับจำนวนคนที่ส่งแล้วในรอบนี้
+        const [submittedRes] = await dbPool.query("SELECT COUNT(DISTINCT UserID) as count FROM Constraints WHERE SettingPeriod = ?", [nextMonthStr]);
+        const submittedCount = submittedRes[0].count;
+
+        // 4. เช็คว่า "ฉัน" ส่งหรือยัง?
+        const [myRes] = await dbPool.query("SELECT COUNT(*) as count FROM Constraints WHERE UserID = ? AND SettingPeriod = ?", [userId, nextMonthStr]);
+        const iHaveSubmitted = myRes[0].count > 0;
+
+        res.json({
+            success: true,
+            total: totalNurses,
+            submitted: submittedCount,
+            myStatus: iHaveSubmitted
+        });
+
+    } catch (err) {
+        console.error("Constraint Status Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+// ✅ API ดึงข้อจำกัดส่วนตัว (เพื่อนำกลับมาแก้ไข)
+app.get('/api/get-my-constraints', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const period = req.query.period; // รับค่าวันที่รอบจัดเวร (เช่น 2026-01-01)
+
+        if (!period) return res.status(400).json({ success: false, message: "Missing Period" });
+
+        const sql = `SELECT * FROM Constraints WHERE UserID = ? AND SettingPeriod = ?`;
+        const [rows] = await dbPool.query(sql, [userId, period]);
+
+        if (rows.length > 0) {
+            res.json({ success: true, data: rows[0] });
+        } else {
+            res.json({ success: false, message: "ยังไม่เคยส่งข้อมูล" });
+        }
+
+    } catch (err) {
+        console.error("Get Constraints Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });

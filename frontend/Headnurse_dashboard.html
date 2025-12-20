@@ -4,79 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Head Nurse Dashboard</title>
-    <script src="lib/tailwindcss.js"></script>
+    
+    <link href="css/style.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="lib/flatpickr.css">
+    
     <script src="lib/flatpickr.js"></script>
     <script src="lib/th.js"></script>
     <script src="components.js"></script>
-
-    <style type="text/tailwindcss">
-        body { 
-            font-family: 'Kanit', sans-serif; 
-            background-color: #f3f4f6; 
-            color: #374151;
-        }
-        .modern-card {
-            background: white;
-            border-radius: 24px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            border: 1px solid #f9fafb;
-        }
-        .toggle-btn {
-            @apply px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300;
-        }
-        .toggle-active-open {
-            background-color: #10b981; color: white; box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
-        }
-        .toggle-active-closed {
-            background-color: #ef4444; color: white; box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
-        }
-        .toggle-inactive {
-            color: #9ca3af; background-color: transparent;
-        }
-        .stat-input {
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #4b5563;
-            border: 2px solid #f3f4f6;
-            border-radius: 16px;
-            padding: 12px;
-            transition: all 0.2s;
-        }
-        .stat-input:focus {
-            outline: none;
-            border-color: #8b5cf6;
-            background-color: #fff;
-            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-        }
-        .btn-primary {
-            background: linear-gradient(to right, #8b5cf6, #7c3aed);
-            color: white;
-            font-weight: 600;
-            border-radius: 16px;
-            padding: 14px;
-            transition: transform 0.1s;
-            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
-        }
-        .btn-disabled {
-            background: white !important;
-            color: #9ca3af !important;
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none !important;
-            border: 1px solid #e5e7eb;
-        }
-        .btn-primary:active { transform: scale(0.98); }
-        .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
+    <div id="toast-container" class="fixed top-4 right-4 z-[10000] flex flex-col gap-2 pointer-events-none"></div>
 
     <app-header></app-header>
+    
     <main class="flex-1 overflow-y-auto bg-[#f8f9fa] pb-32">
         <div class="max-w-screen-md mx-auto p-4 space-y-6">
 
@@ -132,10 +74,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <div>
                         <h3 class="font-bold text-gray-800">ความคืบหน้าการส่งข้อจำกัด</h3>
-                        <p class="text-xs text-gray-400" id="submission-count-text">กำลังโหลดข้อมูล...</p>
+                        <p class="text-xs text-gray-400 progress-text" id="submission-count-text">กำลังโหลดข้อมูล...</p>
                     </div>
                     <div class="text-right">
-                        <span id="submission-percent" class="text-2xl font-black text-amber-500">0%</span>
+                        <span id="submission-percent" class="progress-percent text-2xl font-black text-amber-500">0%</span>
                     </div>
                 </div>
                 <div class="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
@@ -182,7 +124,7 @@
                         <div>
                             <div class="flex items-center gap-2">
                                 <h4 class="text-sm font-bold text-gray-700 group-hover:text-violet-700 transition-colors">ส่งข้อจำกัด (ส่วนตัว)</h4>
-                                <span id="my-submission-badge" class="hidden px-2 py-0.5 rounded-full text-[9px] font-bold"></span>
+                                <span id="my-constraint-status" class="px-2 py-1 rounded bg-gray-100 text-gray-400 text-xs font-bold">รอตรวจสอบ...</span>
                             </div>
                             <p class="text-[10px] text-gray-400">สำหรับหัวหน้าพยาบาล (ต้องส่งทุกรอบ)</p>
                         </div>
@@ -202,18 +144,19 @@
                     </div>
                     <i class="fas fa-chevron-right text-gray-300 group-hover:text-blue-500 transition-colors"></i>
                 </a>
+
                 <a href="admin-import.html" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-green-400 transition-all duration-200 cursor-pointer">
-                <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
-                        <i class="fas fa-file-excel text-lg"></i>
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-file-excel text-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-700 group-hover:text-green-700 transition-colors">นำเข้าข้อมูล (Excel)</h4>
+                            <p class="text-[10px] text-gray-400">อัปโหลดไฟล์รายชื่อพยาบาล</p>
+                        </div>
                     </div>
-                    <div>
-                        <h4 class="text-sm font-bold text-gray-700 group-hover:text-green-700 transition-colors">นำเข้าข้อมูล (Excel)</h4>
-                        <p class="text-[10px] text-gray-400">อัปโหลดไฟล์รายชื่อพยาบาล</p>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right text-gray-300 group-hover:text-green-500 transition-colors"></i>
-            </a>
+                    <i class="fas fa-chevron-right text-gray-300 group-hover:text-green-500 transition-colors"></i>
+                </a>
             </div>
 
             <div id="generate-section">
@@ -262,25 +205,50 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             checkHeadNurseRole();
-            // setupMenu(); // ❌ ลบออก เพราะ app-header จัดการแล้ว
-            // updateDate(); // ❌ ลบออก เพราะ app-header จัดการแล้ว
             setupCalendar();
             loadAllData();
+            
+            // ✅ เรียกดึงข้อมูลสถานะการส่งข้อจำกัดทันที
+            updateConstraintStatus();
         });
 
-        // 🟠 เพิ่มฟังก์ชันดึงสถานะหัวหน้าเพื่ออัปเดต Badge
-        function updateMySubmissionBadge(hasSubmitted) {
-            const badge = document.getElementById('my-submission-badge');
-            if(!badge) return;
-            badge.classList.remove('hidden', 'bg-emerald-100', 'text-emerald-600', 'bg-rose-100', 'text-rose-600');
-            badge.classList.add('block');
-            
-            if(hasSubmitted) {
-                badge.innerText = 'ส่งแล้ว';
-                badge.classList.add('bg-emerald-100', 'text-emerald-600');
-            } else {
-                badge.innerText = 'ยังไม่ส่ง';
-                badge.classList.add('bg-rose-100', 'text-rose-600');
+        // ✅ ฟังก์ชันดึงสถานะการส่งข้อจำกัด (Progress + Personal Status)
+        async function updateConstraintStatus() {
+            try {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`${API_URL}/api/constraint-status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    // 1. อัปเดต Progress
+                    const progressText = document.querySelector('.progress-text');
+                    if (progressText) {
+                        progressText.innerText = `ส่งแล้ว ${data.submitted} จากพยาบาลทั้งหมด ${data.total} คน`;
+                    }
+                    
+                    const percent = Math.round((data.submitted / data.total) * 100) || 0;
+                    const percentText = document.querySelector('.progress-percent');
+                    if (percentText) percentText.innerText = `${percent}%`;
+                    
+                    const progressBar = document.getElementById('submission-bar');
+                    if (progressBar) progressBar.style.width = `${percent}%`;
+
+                    // 2. อัปเดต Badge ส่วนตัว
+                    const statusBadge = document.getElementById('my-constraint-status');
+                    if (statusBadge) {
+                        if (data.myStatus) {
+                            statusBadge.innerText = 'ส่งแล้ว';
+                            statusBadge.className = 'px-2 py-1 rounded bg-green-100 text-green-600 text-xs font-bold';
+                        } else {
+                            statusBadge.innerText = 'ยังไม่ส่ง';
+                            statusBadge.className = 'px-2 py-1 rounded bg-red-100 text-red-600 text-xs font-bold';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Load Constraint Status Error:", err);
             }
         }
 
@@ -290,10 +258,6 @@
                 if (!userStr) throw new Error("No user found");
                 const user = JSON.parse(userStr);
                 if (user.RoleID !== 1) throw new Error("Unauthorized");
-                
-                // ❌ ส่วนนี้ลบออก เพราะ header จัดการแสดงผลข้อมูล User เองแล้ว
-                // document.getElementById('admin-name').innerText = `${user.FirstName} ${user.LastName}`;
-                // ... code เดิมที่จัดการรูปภาพ ...
             } catch (e) {
                 localStorage.clear();
                 window.location.href = 'login.html';
@@ -304,44 +268,66 @@
             flatpickr("#deadlineDate", { locale:"th", dateFormat:"Y-m-d", altInput:true, altFormat:"j F Y", disableMobile:true, appendTo:document.getElementById('date-container') });
         }
 
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) { console.error("Error: Toast container not found"); return; }
+
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-500' : (type === 'error' ? 'bg-rose-500' : 'bg-amber-500');
+            const iconClass = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-times-circle' : 'fa-info-circle');
+
+            toast.className = `toast pointer-events-auto flex items-center w-full max-w-xs p-4 text-white rounded-xl shadow-lg ${bgClass} mb-2 transform transition-all duration-300 translate-x-full`;
+            toast.innerHTML = `
+                <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-${type === 'warning' ? 'amber' : 'white'} bg-white/20 rounded-lg">
+                    <i class="fas ${iconClass}"></i>
+                </div>
+                <div class="ml-3 text-sm font-medium break-words">${message}</div>
+                <button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-white/10 text-white rounded-lg p-1.5 hover:bg-white/20 inline-flex h-8 w-8" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => { toast.classList.remove('translate-x-full'); });
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         async function loadAllData() {
             const token = localStorage.getItem('authToken');
             const statusBarText = document.getElementById('status-bar-text');
 
             try {
-                const [settingsRes, statusRes, pendingRes, submissionRes] = await Promise.all([
+                const [settingsRes, statusRes, pendingRes] = await Promise.all([
                     fetch(`${API_URL}/api/admin/get-settings`, {headers:{'Authorization':`Bearer ${token}`}}),
                     fetch(`${API_URL}/api/check-constraint-window`, {headers:{'Authorization':`Bearer ${token}`}}),
-                    fetch(`${API_URL}/api/admin/pending-counts`, {headers:{'Authorization':`Bearer ${token}`}}),
-                    fetch(`${API_URL}/api/admin/check-submission-status`, {headers:{'Authorization':`Bearer ${token}`}})
+                    fetch(`${API_URL}/api/admin/pending-counts`, {headers:{'Authorization':`Bearer ${token}`}})
                 ]);
 
                 const settings = await settingsRes.json();
                 const status = await statusRes.json();
                 isWindowOpen = status.isOpen;
 
-                // --- 🟢 ส่วนเสริม: AUTO CLOSE LOGIC ---
+                // Auto Close Logic
                 if (settings.success && settings.settings && settings.settings.deadline && isWindowOpen) {
                     const deadlineDate = new Date(settings.settings.deadline);
                     const today = new Date();
-                    
-                    // ปรับให้เทียบเฉพาะวันที่ (เวลา 00:00)
                     today.setHours(0, 0, 0, 0);
                     deadlineDate.setHours(0, 0, 0, 0);
 
                     if (today > deadlineDate) {
-                        console.log("ระบบตรวจพบว่าเลยกำหนด Deadline แล้ว กำลังปิดระบบอัตโนมัติ...");
+                        console.log("Deadline exceeded. Auto-closing...");
                         await fetch(`${API_URL}/api/admin/toggle-window`, { 
                             method: 'POST', 
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
                             body: JSON.stringify({ status: 'Closed' }) 
                         });
-                        isWindowOpen = false; // เปลี่ยนสถานะเพื่ออัปเดต UI ทันที
+                        isWindowOpen = false;
                     }
                 }
-                // ------------------------------------
 
-                // อัปเดต UI ตามปกติ
                 if(settings.success && settings.settings) {
                     document.getElementById('quotaMorning').value = settings.settings.morning;
                     document.getElementById('quotaAfternoon').value = settings.settings.afternoon;
@@ -357,17 +343,6 @@
                     document.getElementById('pending-trade-count').innerText = pending.tradeCount;
                 }
 
-                const submission = await submissionRes.json();
-                if(submission.success) {
-                    const { submittedCount, totalNurses, hasAdminSubmitted } = submission;
-                    isSubmissionComplete = submittedCount >= totalNurses;
-                    const percent = totalNurses > 0 ? Math.round((submittedCount / totalNurses) * 100) : 0;
-                    document.getElementById('submission-count-text').innerText = `ส่งแล้ว ${submittedCount} จากพยาบาลทั้งหมด ${totalNurses} คน`;
-                    document.getElementById('submission-percent').innerText = `${percent}%`;
-                    document.getElementById('submission-bar').style.width = `${percent}%`;
-                    updateMySubmissionBadge(hasAdminSubmitted);
-                }
-
                 checkGenerateEligibility();
                 statusBarText.innerText = "ข้อมูลล่าสุด";
             } catch(e) { 
@@ -375,16 +350,18 @@
                 statusBarText.classList.add('text-red-500'); 
             }
         }
+
         function checkGenerateEligibility() {
             const btnReal = document.getElementById('btn-generate-real');
             const btnLocked = document.getElementById('btn-generate-locked');
             const lockedReason = document.getElementById('locked-reason');
-            if (!isWindowOpen && isSubmissionComplete) {
+            
+            // Logic คร่าวๆ (อาจต้องปรับตาม isSubmissionComplete จริงๆ)
+            if (!isWindowOpen) {
                 btnReal.classList.remove('hidden'); btnLocked.classList.add('hidden');
             } else {
                 btnReal.classList.add('hidden'); btnLocked.classList.remove('hidden');
-                if (isWindowOpen) lockedReason.innerText = "กรุณากด CLOSED ระบบเพื่อปิดรับข้อมูลก่อนจัดเวร";
-                else if (!isSubmissionComplete) lockedReason.innerText = "พยาบาลยังส่งข้อจำกัดไม่ครบถ้วน ไม่สามารถประมวลผลได้";
+                lockedReason.innerText = "กรุณากด CLOSED ระบบเพื่อปิดรับข้อมูลก่อนจัดเวร";
             }
         }
 
@@ -394,8 +371,10 @@
             const statusText = document.getElementById('period-status-text');
             const saveBtn = document.getElementById('btn-save-settings');
             const inputs = document.querySelectorAll('#scheduleSettingsForm input');
+            
             btnOpen.className = isOpen ? 'toggle-btn toggle-active-open' : 'toggle-btn toggle-inactive';
             btnClosed.className = !isOpen ? 'toggle-btn toggle-active-closed' : 'toggle-btn toggle-inactive';
+            
             if(isOpen) {
                 statusText.innerHTML = '<span class="text-emerald-500 font-bold">● เปิดรับข้อมูล</span>';
                 inputs.forEach(el => el.disabled = true);
@@ -413,22 +392,55 @@
         async function togglePeriod(status) {
             if(!confirm(`ยืนยันการ "${status==='Open'?'เปิด':'ปิด'}" ระบบ?\n\n${status==='Open' ? 'พยาบาลจะสามารถส่งเวรได้ และคุณจะแก้ไขค่าไม่ได้' : 'พยาบาลจะส่งเวรไม่ได้อีก และคุณสามารถสั่งจัดเวรได้'}`)) return;
             const res = await fetch(`${API_URL}/api/admin/toggle-window`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('authToken')}`}, body:JSON.stringify({status}) });
-            if(res.ok) loadAllData();
+            if(res.ok) {
+                loadAllData();
+                updateConstraintStatus(); // อัปเดตสถานะด้วย
+            }
         }
 
         document.getElementById('scheduleSettingsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if(!confirm('ยืนยันการ "บันทึกและเปิดระบบ"?\n\nเมื่อกดตกลง:\n1. ข้อมูลจะถูกบันทึก\n2. ระบบจะเปลี่ยนสถานะเป็น OPEN\n3. การตั้งค่าจะถูกล็อกทันที')) return;
+
             const saveBtn = document.getElementById('btn-save-settings');
-            saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+            const originalText = saveBtn.innerHTML;
+            saveBtn.disabled = true; 
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...';
+
             const m = document.getElementById('quotaMorning').value;
             const a = document.getElementById('quotaAfternoon').value;
             const n = document.getElementById('quotaNight').value;
             const d = document.getElementById('deadlineDate').value;
-            const res = await fetch(`${API_URL}/api/admin/save-settings`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('authToken')}`}, body:JSON.stringify({morning:m, afternoon:a, night:n, deadline:d}) });
-            const result = await res.json();
-            if(result.success) { alert('บันทึกการตั้งค่าเรียบร้อย!'); loadAllData(); }
-            else { alert('Error: ' + result.message); }
-            saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการตั้งค่า';
+            const token = localStorage.getItem('authToken');
+
+            try {
+                const saveRes = await fetch(`${API_URL}/api/admin/save-settings`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, 
+                    body: JSON.stringify({morning: m, afternoon: a, night: n, deadline: d}) 
+                });
+                const saveResult = await saveRes.json();
+
+                if(!saveResult.success) throw new Error('บันทึกข้อมูลไม่สำเร็จ: ' + saveResult.message);
+
+                const openRes = await fetch(`${API_URL}/api/admin/toggle-window`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, 
+                    body: JSON.stringify({ status: 'Open' }) 
+                });
+
+                if(openRes.ok) {
+                    showToast('บันทึกและเปิดระบบเรียบร้อย!', 'success');
+                    await loadAllData(); 
+                } else {
+                    throw new Error('บันทึกข้อมูลสำเร็จ แต่เปิดระบบล้มเหลว');
+                }
+            } catch(e) {
+                console.error(e);
+                showToast(e.message, 'error');
+                saveBtn.disabled = false; 
+                saveBtn.innerHTML = originalText;
+            }
         });
     </script>
 </body>

@@ -507,7 +507,7 @@
                         timer: 1500,
                         showConfirmButton: false
                     }).then(() => {
-                        // Redirect ไปที่ Trade Market
+                        // 🔴🔴🔴 Redirect ไปที่หน้าตลาดขายเวร (แก้ชื่อไฟล์ตรงนี้) 🔴🔴🔴
                         window.location.href = 'trade_market.html';
                     });
                 } else {
@@ -624,8 +624,8 @@
                         timer: 1500,
                         showConfirmButton: false
                     }).then(() => {
-                        // Redirect ไปที่ Trade Market
-                        window.location.href = 'trade_market.html';
+                        // 🔴🔴🔴 Redirect ไปที่หน้าแลกเวร (อย่าลืมเปลี่ยน swap_market.html เป็นชื่อไฟล์จริงของคุณ) 🔴🔴🔴
+                        window.location.href = 'swap_request.html';
                     });
                 } else { Swal.fire('เกิดข้อผิดพลาด', data.message, 'error'); }
             } catch (err) { Swal.fire('Error', 'Connection Error', 'error'); }

@@ -379,9 +379,6 @@ customElements.define('app-date-picker', AppDatePicker);
     const performLogout = () => {
         const user = getUser();
         if (!user) return;
-
-        // ✅ แก้ไขตรงนี้: เรียกใช้ฟังก์ชัน logout() ที่เราทำไว้ด้านบนสุดของไฟล์
-        // เพื่อให้ระบบยิง API ไปบอก Server และล้างค่า LocalStorage พร้อม Redirect ทีเดียว
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
@@ -419,7 +416,7 @@ customElements.define('app-date-picker', AppDatePicker);
 function LogoComponent() {
     return `
         <div class="logo">
-            <img src="https://img5.pic.in.th/file/secure-sv1/logo-nurse.png" alt="Logo" class="logo-img">
+            <img src="logo.png" alt="Logo" class="logo-img"> 
             <span class="logo-text">AUTONURSESHIFT</span>
         </div>
     `;
