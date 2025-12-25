@@ -63,7 +63,7 @@ class AppHeader extends HTMLElement {
                 title: 'HEAD NURSE',
                 sub: 'ADMINISTRATION',
                 homeLink: 'Headnurse_dashboard.html',
-                notiLink: 'Admin_Approvals.html',
+                notiLink: 'notifications.html',
                 userIcon: 'fa-user-md',
             }
             : {
@@ -298,7 +298,7 @@ class AppNavbar extends HTMLElement {
             { href: 'trade_market.html', icon: 'fa-shopping-cart', label: 'ซื้อขาย' },
             { href: 'schedule.html', icon: 'fa-calendar-alt', label: 'ตารางเวร' },
             { href: 'nurse_list.html', icon: 'fa-user-nurse', label: 'บุคลากร' },
-            { href: 'approve_swap.html', icon: 'fa-clipboard-check', label: 'อนุมัติ' },
+            { href: 'state.html', icon: 'fa-chart-bar', label: 'สถิติ' }
         ];
 
         const nurseMenus = [
@@ -442,3 +442,88 @@ function SuccessCardComponent(props) {
         </div>
     `;
 }
+// =========================================================
+// 4. SMART NOTIFICATION SYSTEM (Polling & Toast)
+// =========================================================
+
+/**
+ * ฟังก์ชันสร้างกล่องแจ้งเตือนเด้งมุมจอ (Smart Toast)
+ */
+function showSmartToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast'; 
+    toast.innerHTML = `
+        <div style="margin-right: 15px; font-size: 20px;">🔔</div>
+        <div>
+            <strong style="display: block; color: #333;">แจ้งเตือนใหม่</strong>
+            <small style="color: #666;">${message}</small>
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // หายไปเองใน 5 วินาที
+    setTimeout(() => {
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 500);
+    }, 5000);
+}
+
+/**
+ * ฟังก์ชันสำหรับเริ่มระบบเช็กแจ้งเตือนอัตโนมัติ
+ */
+function initNotificationSystem(userId, token) {
+    let lastCount = 0;
+    let isFirstRun = true;
+
+    const checkNoti = () => {
+        // ใช้ API_BASE ที่คุณประกาศไว้ตอนต้นไฟล์
+        fetch(`${API_BASE}/api/notifications/unread-count/${userId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const currentCount = data.count;
+
+                // ตรวจสอบว่ามีของใหม่มาไหม (ยกเว้นการรันครั้งแรก)
+                if (!isFirstRun && currentCount > lastCount) {
+                    // เปลี่ยนจาก alert เป็น Smart Toast ตามที่คุณแก้ไข
+                    showSmartToast("มีคำขอใหม่ส่งถึงคุณ! กรุณาเช็กที่เมนูแจ้งเตือน");
+                    
+                    if (typeof refreshNotificationUI === 'function') {
+                        refreshNotificationUI(currentCount);
+                    }
+                }
+
+                // อัปเดตตัวเลข Badge (ใช้ id 'unread-count' ให้ตรงกับ AppHeader ของคุณ)
+                const badge = document.getElementById('unread-count');
+                if (badge) {
+                    badge.innerText = currentCount > 99 ? '99+' : currentCount;
+                    badge.classList.toggle('hidden', currentCount === 0);
+                }
+
+                lastCount = currentCount;
+                isFirstRun = false;
+            }
+        })
+        .catch(err => console.error("Notification Polling Error:", err));
+    };
+
+    // เช็กทุกๆ 20 วินาที
+    setInterval(checkNoti, 20000);
+    checkNoti(); 
+}
+
+// เรียกใช้งานอัตโนมัติเมื่อมีการ Login อยู่ (Self-Invoking)
+(function() {
+    const user = getUser();
+    const token = localStorage.getItem('authToken');
+    if (user && token) {
+        initNotificationSystem(user.UserID, token);
+    }
+})();

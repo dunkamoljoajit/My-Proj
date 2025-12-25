@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AUTONURSESHIFT - ลืมรหัสผ่าน</title>
-    
+    <link rel="icon" type="image/png" href="logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;700&family=Prompt:wght@700&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
 
     <style>
         * {
@@ -310,7 +309,7 @@
             sendBtn.style.opacity = "0.7";
 
             try {
-                // ⚠️ อย่าลืมเปลี่ยน URL นี้ให้ตรงกับ Server จริงของคุณเมื่อขึ้น Production
+
                 const response = await fetch("http://localhost:3000/api/forgot-password", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

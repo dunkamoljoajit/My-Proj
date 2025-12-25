@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTONURSESHIFT - Team Intelligence</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="lib/xlsx.full.min.js"></script>
+    <script src="lib/moment.js"></script>
+    <script src="components.js"></script>
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700&display=swap');
+
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background-color: #fcfdfe;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.03) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.03) 0px, transparent 50%);
+        }
+
+        /* Premium Card Glassmorphism */
+        .premium-card {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            box-shadow: 0 25px 50px -12px rgba(30, 27, 75, 0.25);
+        }
+
+        .glass-stats {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Smooth Transition for Nurse Cards */
+        .nurse-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(241, 245, 249, 0.8);
+        }
+
+        .nurse-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+            border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        .premium-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1em;
+        }
+
+        /* Custom Scrollbar */
+        .shift-log-container::-webkit-scrollbar { width: 5px; }
+        .shift-log-container::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+
+<body class="text-slate-800">
+    <div class="flex flex-col min-h-screen">
+        <app-header class="sticky top-0 z-50"></app-header>
+
+        <main class="flex-1 max-w-screen-md mx-auto w-full px-5 py-8 space-y-8">
+            
+            <div class="flex items-end justify-between">
+                <div>
+                    <h2 class="text-3xl font-bold text-slate-900 tracking-tight">สถิติทีม</h2>
+                    <p class="text-slate-400 text-sm mt-1" id="displayDate">...</p>
+                </div>
+                <div class="relative group">
+                    <select id="monthSelect" onchange="fetchTeamStats()" 
+                        class="premium-select bg-white text-indigo-600 text-sm font-semibold pl-4 pr-10 py-2.5 rounded-2xl border border-slate-200 shadow-sm focus:ring-4 focus:ring-indigo-50 transition-all cursor-pointer">
+                        <option value="2025-12">ธันวาคม 2568</option>
+                        <option value="2025-11">พฤศจิกายน 2568</option>
+                        <option value="2025-10">ตุลาคม 2568</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="premium-card rounded-[3rem] p-8 text-white relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+                
+                <div class="relative z-10 space-y-6">
+                    <div>
+                        <span class="text-indigo-200 text-xs font-medium uppercase tracking-[0.2em]">Monthly Overview</span>
+                        <div class="flex items-baseline gap-3 mt-1">
+                            <h3 class="text-6xl font-bold tracking-tighter" id="totalWardShifts">0</h3>
+                            <span class="text-indigo-300 font-light text-lg italic">Shifts Assigned</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="glass-stats p-4 rounded-3xl text-center">
+                            <p class="text-orange-300 text-[10px] font-bold uppercase tracking-widest mb-1">Morning</p>
+                            <p id="totalM" class="text-2xl font-semibold">0</p>
+                        </div>
+                        <div class="glass-stats p-4 rounded-3xl text-center">
+                            <p class="text-sky-300 text-[10px] font-bold uppercase tracking-widest mb-1">Afternoon</p>
+                            <p id="totalA" class="text-2xl font-semibold">0</p>
+                        </div>
+                        <div class="glass-stats p-4 rounded-3xl text-center">
+                            <p class="text-indigo-300 text-[10px] font-bold uppercase tracking-widest mb-1">Night</p>
+                            <p id="totalN" class="text-2xl font-semibold">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex items-center justify-between px-2">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Team Performance</h3>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-[10px] font-bold text-slate-500">LIVE FEED</span>
+                    </div>
+                </div>
+
+                <div id="nurseListContainer" class="grid gap-4">
+                    </div>
+            </div>
+
+            <button onclick="exportToExcel()" 
+                class="w-full py-5 bg-white text-emerald-600 border border-slate-100 rounded-[2.5rem] font-bold text-sm shadow-xl shadow-slate-100/50 hover:bg-emerald-50 hover:shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-95">
+                <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-file-excel text-xs"></i>
+                </div>
+                ส่งออกรายงานอัจฉริยะ (XLSX)
+            </button>
+        </main>
+
+        <div id="nurseModal" class="fixed inset-0 z-[100] hidden flex items-end justify-center px-0">
+            <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
+            <div class="relative w-full max-w-screen-md bg-white rounded-t-[3.5rem] shadow-2xl transform translate-y-full transition-transform duration-500 flex flex-col" style="max-height: 88vh;" id="modalContent">
+                
+                <div class="p-8 pb-4">
+                    <div class="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-8"></div>
+                    <div class="flex items-center gap-6 mb-8">
+                        <div class="relative">
+                            <img id="modalImg" src="" class="w-24 h-24 rounded-[2rem] shadow-2xl border-4 border-white object-cover">
+                            <div id="modalStatusBadge" class="absolute -bottom-2 -right-2 px-3 py-1 rounded-xl text-[10px] font-bold border-2 border-white shadow-lg"></div>
+                        </div>
+                        <div>
+                            <h3 id="modalName" class="text-3xl font-bold text-slate-900 tracking-tight"></h3>
+                            <p class="text-slate-400 text-sm mt-1 italic">Personal Duty Schedule</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3 mb-8">
+                        <div class="bg-slate-50 p-5 rounded-[2rem] text-center border border-slate-100">
+                            <p class="text-orange-500 text-[10px] font-black uppercase mb-1">M</p>
+                            <p id="mShift" class="text-2xl font-bold text-slate-800">0</p>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-[2rem] text-center border border-slate-100">
+                            <p class="text-sky-500 text-[10px] font-black uppercase mb-1">A</p>
+                            <p id="aShift" class="text-2xl font-bold text-slate-800">0</p>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-[2rem] text-center border border-slate-100">
+                            <p class="text-indigo-500 text-[10px] font-black uppercase mb-1">N</p>
+                            <p id="nShift" class="text-2xl font-bold text-slate-800">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto px-8 shift-log-container space-y-3 pb-10" id="shiftDateList"></div>
+
+                <div class="p-8 pt-4 border-t border-slate-50 bg-slate-50/30 rounded-t-[3rem]">
+                    <button onclick="closeModal()" class="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-bold shadow-2xl shadow-indigo-200 active:scale-95 transition-all">
+                        ปิดหน้าต่างข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <app-navbar class="sticky bottom-0 z-50"></app-navbar>
+    </div>
+
+    <script>
+        // JS Logic คงเดิมตามของคุณ แต่ปรับชื่อ Class ให้ตรงกับ UI ใหม่
+        function renderNurses(nurses) {
+            const container = document.getElementById('nurseListContainer');
+            container.innerHTML = '';
+            
+            nurses.forEach(n => {
+                const pM = n.total > 0 ? (n.m / n.total) * 100 : 0;
+                const pA = n.total > 0 ? (n.a / n.total) * 100 : 0;
+                const pN = n.total > 0 ? (n.n / n.total) * 100 : 0;
+
+                const div = document.createElement('div');
+                div.className = "nurse-card bg-white rounded-[2rem] p-5 flex items-center gap-5 cursor-pointer active:scale-95";
+                div.onclick = () => openNurseDetails(n);
+                div.innerHTML = `
+                    <div class="relative">
+                        <img src="${n.img}" class="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-50">
+                        <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${n.status === 'ปกติ' ? 'bg-emerald-500' : 'bg-orange-500'}"></span>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="text-lg font-semibold text-slate-800">${n.name}</h4>
+                            <span class="text-[10px] font-bold text-slate-400">Total: ${n.total}</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden flex">
+                            <div class="bg-orange-400" style="width:${pM}%"></div>
+                            <div class="bg-sky-400" style="width:${pA}%"></div>
+                            <div class="bg-indigo-600" style="width:${pN}%"></div>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-slate-200 text-xs pl-2"></i>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.onload = () => {
+            document.getElementById('displayDate').textContent = moment().locale('th').format('ddddที่ D MMMM YYYY');
+            fetchTeamStats();
+        };
+
+        // Modal Logic ปรับให้สมูทขึ้น
+        function openNurseDetails(n) {
+            const modal = document.getElementById('nurseModal');
+            const content = document.getElementById('modalContent');
+            
+            // Populate data... (เหมือนเดิม)
+            document.getElementById('modalName').innerText = n.name;
+            document.getElementById('mShift').innerText = n.m;
+            document.getElementById('aShift').innerText = n.a;
+            document.getElementById('nShift').innerText = n.n;
+            document.getElementById('modalImg').src = n.img;
+            
+            const badge = document.getElementById('modalStatusBadge');
+            badge.innerText = n.status;
+            badge.className = `absolute -bottom-2 -right-2 px-3 py-1 rounded-xl text-[10px] font-bold border-2 border-white shadow-lg ${n.status === 'ปกติ' ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`;
+
+            // Render Daily Logs...
+            const list = document.getElementById('shiftDateList');
+            list.innerHTML = '';
+            n.dates.sort((a,b) => moment(a.d, 'DD MMM').unix() - moment(b.d, 'DD MMM').unix()).forEach(shift => {
+                let color = "bg-slate-50 text-slate-400";
+                if(shift.type.includes('เช้า')) color = "bg-orange-50 text-orange-600 border border-orange-100";
+                else if(shift.type.includes('บ่าย')) color = "bg-sky-50 text-sky-600 border border-sky-100";
+                else if(shift.type.includes('ดึก')) color = "bg-indigo-50 text-indigo-600 border border-indigo-100";
+
+                const row = document.createElement('div');
+                row.className = `flex justify-between items-center p-4 rounded-2xl ${color} font-semibold text-sm`;
+                row.innerHTML = `<span>${shift.d}</span><span class="text-[10px] uppercase font-black tracking-widest">${shift.type}</span>`;
+                list.appendChild(row);
+            });
+
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('translate-y-full'), 10);
+            document.body.classList.add('modal-active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalContent').classList.add('translate-y-full');
+            setTimeout(() => {
+                document.getElementById('nurseModal').classList.add('hidden');
+                document.body.classList.remove('modal-active');
+            }, 500);
+        }
+    </script>
+</body>
+</html>

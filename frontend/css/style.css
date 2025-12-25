@@ -4556,3 +4556,60 @@ video {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+/* กล่องแจ้งเตือนเด้งมุมขวาบน */
+.notification-toast {
+    position: fixed;
+    top: 85px; /* ปรับลงมาใต้ Header */
+    right: 20px;
+    background: white;
+    min-width: 280px;
+    border-left: 5px solid #4f46e5; /* สี Indigo ตามธีมพยาบาล */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    padding: 16px 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    z-index: 3000 !important; /* ให้ทับทุกอย่าง */
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    animation: slideInRight 0.5s ease-out forwards;
+}
+
+/* อนิเมชั่นตอนเด้งเข้า */
+@keyframes slideInRight {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* อนิเมชั่นตอนเด้งออก */
+.notification-toast.hide {
+    animation: slideOutRight 0.5s ease-in forwards;
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+/* ตกแต่งตัวอักษรข้างใน */
+.notification-toast strong {
+    color: #1e293b;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.notification-toast small {
+    color: #64748b;
+    font-size: 12px;
+}

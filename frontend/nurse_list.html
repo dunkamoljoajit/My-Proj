@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จัดการรายชื่อพยาบาล - AutoNurseShift</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="components.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&display=swap');
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .status-badge { padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
+        .status-active { background-color: #dcfce7; color: #166534; }
+        .status-inactive { background-color: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <app-header></app-header>
+
+    <main class="flex-1 overflow-y-auto bg-[#f8f9fa] pb-32">
+        <div class="container mx-auto p-6 max-w-6xl">
+            
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">รายชื่อบุคลากรทั้งหมด</h1>
+                    <p class="text-gray-500 text-sm">จัดการสถานะพยาบาล (ลาออก/เกษียณ/ย้าย) เพื่อไม่ให้นำไปจัดเวร</p>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="ค้นหาชื่อ หรือ Email..." 
+                           class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 shadow-sm">
+                    <a href="admin-import.html" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-import"></i> เพิ่ม/Import
+                    </a>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-100 text-gray-700 uppercase text-sm font-semibold">
+                            <tr>
+                                <th class="p-4 border-b">โปรไฟล์</th>
+                                <th class="p-4 border-b">ชื่อ - นามสกุล</th>
+                                <th class="p-4 border-b">ตำแหน่ง</th>
+                                <th class="p-4 border-b text-center">สถานะ</th>
+                                <th class="p-4 border-b text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTableBody" class="text-gray-700">
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-gray-500">
+                                    <i class="fa-solid fa-spinner fa-spin text-2xl"></i> กำลังโหลดข้อมูล...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <app-navbar></app-navbar>
+
+    <script>
+        // ใช้ตัวแปรเดียวกับหน้าอื่นเพื่อความแม่นยำ
+        const API_BASE_URL = (typeof API_BASE !== 'undefined') ? API_BASE : 'http://localhost:3000'; 
+
+        async function fetchUsers() {
+            // แก้ไข: ใช้ 'authToken' ให้ตรงกับหน้า Dashboard เพื่อแก้ปัญหาโดนเตะไปหน้า Login
+            const token = localStorage.getItem('authToken'); 
+            
+            if (!token) { 
+                console.warn("No token found, redirecting to login...");
+                window.location.href = 'login.html'; 
+                return; 
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/all-users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    // หาก Token หมดอายุ หรือ Role ไม่ใช่ Admin ให้เด้งกลับ Login
+                    if (response.status === 401 || response.status === 403) {
+                        localStorage.clear();
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    Swal.fire('Error', data.message, 'error');
+                    return;
+                }
+
+                renderTable(data.users);
+
+            } catch (err) {
+                console.error("Fetch error:", err);
+                Swal.fire('Error', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error');
+            }
+        }
+
+        function renderTable(users) {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '';
+
+            if (users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4">ไม่พบข้อมูลพยาบาลในระบบ</td></tr>`;
+                return;
+            }
+
+            users.forEach(user => {
+                const isInactive = user.Status === 'inactive';
+                const rowClass = isInactive ? 'bg-gray-50' : 'hover:bg-blue-50';
+                const nameClass = isInactive ? 'text-gray-400' : 'text-gray-800 font-medium';
+                const roleName = user.RoleID === 1 ? '<span class="text-violet-600 font-bold">หัวหน้าพยาบาล</span>' : 'พยาบาลวิชาชีพ';
+                const profileImg = user.ProfileImage || 'https://via.placeholder.com/150';
+
+                const tr = document.createElement('tr');
+                tr.className = `border-b transition duration-150 ${rowClass}`;
+                tr.innerHTML = `
+                    <td class="p-4 text-center w-20">
+                        <img src="${profileImg}" class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm mx-auto">
+                    </td>
+                    <td class="p-4">
+                        <div class="flex flex-col">
+                            <span class="${nameClass}">${user.FirstName} ${user.LastName}</span>
+                            <span class="text-xs text-gray-500">${user.Email}</span>
+                        </div>
+                    </td>
+                    <td class="p-4 text-sm">${roleName}</td>
+                    <td class="p-4 text-center">
+                        <span class="status-badge ${isInactive ? 'status-inactive' : 'status-active'}">
+                            ${isInactive ? 'ลาออก/พักงาน' : 'ปฏิบัติงาน'}
+                        </span>
+                    </td>
+                    <td class="p-4 text-center">
+                        ${user.RoleID !== 1 ? `
+                            <button onclick="toggleUserStatus(${user.UserID}, '${user.Status}', '${user.FirstName}')" 
+                                class="px-3 py-1 rounded text-sm font-medium transition duration-200 border 
+                                ${isInactive 
+                                    ? 'border-green-500 text-green-600 hover:bg-green-50' 
+                                    : 'border-red-400 text-red-500 hover:bg-red-50'}">
+                                ${isInactive ? '<i class="fa-solid fa-rotate-left"></i> เรียกกลับ' : '<i class="fa-solid fa-user-xmark"></i> จำหน่ายออก'}
+                            </button>
+                        ` : '<span class="text-gray-300 text-xs italic">ไม่สามารถจัดการ Admin ได้</span>'}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function toggleUserStatus(userId, currentStatus, userName) {
+            const isCurrentlyActive = currentStatus === 'active';
+            const newStatus = isCurrentlyActive ? 'inactive' : 'active';
+            const actionText = isCurrentlyActive ? 'จำหน่ายออก (Inactive)' : 'เรียกกลับมาทำงาน (Active)';
+            const confirmColor = isCurrentlyActive ? '#ef4444' : '#10b981';
+
+            const result = await Swal.fire({
+                title: `ยืนยันการ${actionText}?`,
+                text: `หากจำหน่ายออก "${userName}" จะไม่ถูกนำชื่อไปจัดตารางเวรรอบถัดไป`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: confirmColor,
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'ยืนยันเปลี่ยนสถานะ',
+                cancelButtonText: 'ยกเลิก'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const token = localStorage.getItem('authToken');
+                    const response = await fetch(`${API_BASE_URL}/api/admin/update-user-status`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ targetUserId: userId, newStatus: newStatus })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire({ icon: 'success', title: 'สำเร็จ', text: data.message, timer: 1500 });
+                        fetchUsers(); 
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', 'ไม่สามารถเชื่อมต่อ Server ได้', 'error');
+                }
+            }
+        }
+
+        function filterTable() {
+            const input = document.getElementById('searchInput');
+            const filter = input.value.toLowerCase();
+            const table = document.getElementById('userTableBody');
+            const tr = table.getElementsByTagName('tr');
+
+            for (let i = 0; i < tr.length; i++) {
+                const tdName = tr[i].getElementsByTagName('td')[1];
+                if (tdName) {
+                    const txtValue = tdName.textContent || tdName.innerText;
+                    tr[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+                }
+            }
+        }
+
+        // เริ่มโหลดข้อมูลเมื่อหน้าจอพร้อม
+        document.addEventListener('DOMContentLoaded', fetchUsers);
+    </script>
+</body>
+</html>

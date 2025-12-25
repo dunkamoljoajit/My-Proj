@@ -43,6 +43,12 @@ const storage = new CloudinaryStorage({
     },
 });
 const upload = multer({ storage: storage });
+function getPublicIdFromUrl(url) {
+    const parts = url.split('/');
+    const fileName = parts[parts.length - 1]; 
+    const publicId = fileName.split('.')[0]; 
+    return `autonurseshift-profiles/${publicId}`;
+}
 
 // ==========================================
 // 2. CONFIGURATION: Excel Upload (เก็บใน RAM)
@@ -319,11 +325,53 @@ app.post('/api/forgot-password', async (req, res) => {
         await dbPool.query('INSERT INTO Password_reset_otp (UserID, otp_code, created_at, expires_at, is_used) VALUES (?, ?, ?, ?, ?)', 
             [user.UserID, otp, createdAt, expiresAt, false]);
 
+        // --- เริ่มต้นส่วนแก้ไข HTML Template ---
         const mailOptions = {
-            from: `"AUTONURSESHIFT" <${process.env.EMAIL_USER}>`,
+            from: `"AUTONURSESHIFT Support" <${process.env.EMAIL_USER}>`, // เพิ่มคำว่า Support ให้ดูโปรขึ้น
             to: Email,
-            subject: 'รหัส OTP สำหรับรีเซ็ตรหัสผ่าน',
-            html: `<p>รหัส OTP ของคุณคือ: <b>${otp}</b></p>`
+            subject: '🔑 รหัส OTP สำหรับรีเซ็ตรหัสผ่านของคุณ',
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <style>
+                  body { font-family: 'Sarabun', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; }
+                  .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e1e4e8; }
+                  .header { background-color: #007bff; padding: 25px; text-align: center; }
+                  .header h1 { color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px; }
+                  .content { padding: 30px; text-align: center; color: #333333; }
+                  .otp-box { background-color: #f8f9fa; border: 2px dashed #007bff; border-radius: 8px; padding: 15px 25px; margin: 25px 0; font-size: 36px; font-weight: bold; letter-spacing: 5px; color: #007bff; display: inline-block; }
+                  .footer { background-color: #f4f7f6; padding: 15px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+                  .warning { color: #dc3545; font-size: 14px; margin-top: 15px; }
+                  p { line-height: 1.6; margin-bottom: 10px; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h1>AUTONURSESHIFT</h1>
+                  </div>
+                  <div class="content">
+                    <h2 style="color: #444; margin-top: 0;">รหัสยืนยันตัวตน (OTP)</h2>
+                    <p style="font-size: 16px; color: #555;">เรียน ผู้ใช้งาน,</p>
+                    <p>ระบบได้รับคำขอให้รีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ<br>โปรดใช้รหัส OTP ด้านล่างนี้เพื่อดำเนินการต่อ:</p>
+                    
+                    <div class="otp-box">
+                      ${otp}
+                    </div>
+                    
+                    <p class="warning">⚠️ รหัสนี้จะหมดอายุภายใน 10 นาที</p>
+                    <p style="font-size: 13px; color: #777; margin-top: 30px;">
+                      หากคุณไม่ได้เป็นผู้ส่งคำขอนี้ โปรดอย่าส่งรหัสนี้ให้ผู้อื่น<br>บัญชีของคุณยังคงปลอดภัย
+                    </p>
+                  </div>
+                  <div class="footer">
+                    <p>&copy; ${new Date().getFullYear()} AUTONURSESHIFT System. All rights reserved.</p>
+                  </div>
+                </div>
+              </body>
+              </html>
+            `
         };
         await transporter.sendMail(mailOptions);
         res.status(200).send({ message: 'ส่ง OTP แล้ว' });
@@ -553,21 +601,42 @@ app.post('/api/notifications/mark-all-read', authenticateToken, async (req, res)
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
-// ✅ เพิ่ม API นี้เข้าไปใน index.js เพื่อแก้ Error 404
+// ✅ แก้ไข API นับจำนวน Badge สำหรับพยาบาล (Role 2) และรวมการแจ้งเตือนระบบ
 app.get('/api/notifications/unread-count/:userId', authenticateToken, async (req, res) => {
     try {
         const userId = req.params.userId;
-        
-        // นับเฉพาะรายการแจ้งเตือนที่ UserID ตรงกัน และ IsRead ยังเป็น 0 (ยังไม่อ่าน)
-        const [rows] = await dbPool.query(
+        const userRole = req.user.roleId; 
+
+        // 1. นับแจ้งเตือนจากระบบ (Notifications Table) ที่ยังไม่อ่าน
+        const [systemNotis] = await dbPool.query(
             "SELECT COUNT(*) as count FROM Notifications WHERE UserID = ? AND IsRead = 0",
             [userId]
         );
-        
+
+        let pendingActionCount = 0;
+
+        // 2. ถ้าเป็นพยาบาล (Role 2) ให้ไปนับงานที่เพื่อนส่งมาขอแลก/ซื้อด้วย
+        if (userRole === 2) {
+            // นับคำขอแลกเวรที่ส่งมาถึงเรา และยังรอเราตอบ (status = 'pending')
+            const [swapReqs] = await dbPool.query(
+                "SELECT COUNT(*) as count FROM Shift_Exchange WHERE responder_id = ? AND status = 'pending'",
+                [userId]
+            );
+            // นับคำขอซื้อเวรที่ส่งมาถึงเรา (Status = 'Pending_Seller')
+            const [buyReqs] = await dbPool.query(
+                "SELECT COUNT(*) as count FROM ShiftTransaction WHERE SellerID = ? AND Status = 'Pending_Seller'",
+                [userId]
+            );
+            
+            pendingActionCount = (swapReqs[0].count || 0) + (buyReqs[0].count || 0);
+        }
+
+        // รวมยอดทั้งหมดส่งกลับไปที่ Badge
         res.json({ 
             success: true, 
-            count: rows[0].count 
+            count: (systemNotis[0].count || 0) + pendingActionCount 
         });
+
     } catch (err) { 
         console.error("Unread Count API Error:", err);
         res.status(500).json({ success: false, message: "Server Error" }); 
@@ -1069,59 +1138,6 @@ app.get('/api/swaps/history/:userId', authenticateToken, async (req, res) => {
     }
 });
 
-// ✅ แก้ไข API ดึงแจ้งเตือนรวม
-app.get('/api/notifications/all/:userId', authenticateToken, async (req, res) => {
-    const userId = req.params.userId;
-    const userRole = req.user.roleId || 2; 
-
-    try {
-        let buyReqs = [], swapReqs = [];
-
-        // ส่วนที่ 1: ดึง Request เดิม (Swap/Buy) -- Logic เดิมของคุณ
-        if (userRole === 1) { // หัวหน้า
-             // SQL เดิมของหัวหน้า (หา Pending_HeadNurse / pending_head_nurse)
-             // ... ใส่โค้ดเดิมตรงนี้ ...
-        } else { // พยาบาลทั่วไป
-             const sqlBuy = `SELECT ST.TransactionID as id, 'buy' as type, DATE_FORMAT(DATE_ADD(ST.CreatedAt, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, ST.Price as info, Buyer.FirstName, Buyer.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM ShiftTransaction ST JOIN User Buyer ON ST.BuyerID = Buyer.UserID JOIN NurseSchedule NS ON ST.ScheduleID = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE ST.SellerID = ? AND ST.Status = 'Pending_Seller'`;
-             const sqlSwap = `SELECT SE.exchange_id as id, 'swap' as type, DATE_FORMAT(DATE_ADD(SE.created_at, INTERVAL 7 HOUR), '%Y-%m-%dT%H:%i:%s') as created_at, se.reason as info, Requester.FirstName, Requester.LastName, S.ShiftName, DATE_FORMAT(NS.Nurse_Date, '%Y-%m-%d') as ShiftDate FROM Shift_Exchange SE JOIN User Requester ON SE.requester_id = Requester.UserID JOIN NurseSchedule NS ON SE.responder_schedule_id = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE SE.responder_id = ? AND SE.status = 'pending'`;
-
-             const [r1] = await dbPool.query(sqlBuy, [userId]);
-             buyReqs = r1;
-             const [r2] = await dbPool.query(sqlSwap, [userId]);
-             swapReqs = r2;
-        }
-
-        // ✅ ส่วนที่ 2 (เพิ่มใหม่): ดึงจากตาราง Notifications
-        // Map ชื่อ Field ให้ตรงกับที่ Frontend ใช้ (FirstName, LastName, info)
-        const sqlSystem = `
-                SELECT 
-                    NotiID as id, 
-                    'system' as type, 
-                    DATE_FORMAT(CreatedAt, '%Y-%m-%dT%H:%i:%s') as created_at,
-                    Message as info,
-                    'ระบบ' as FirstName, 
-                    Title as LastName, 
-                    RelatedShift as ShiftName,
-                    RelatedDate as ShiftDate 
-                FROM Notifications 
-                WHERE UserID = ? 
-                ORDER BY CreatedAt DESC LIMIT 30
-            `;
-        const [systemNotis] = await dbPool.query(sqlSystem, [userId]);
-
-        // 3. รวมร่างแล้วส่งกลับ
-        const allNotis = [...buyReqs, ...swapReqs, ...systemNotis];
-        
-        // เรียงตามเวลาล่าสุด
-        allNotis.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
-        res.json({ success: true, notifications: allNotis });
-
-    } catch (err) { 
-        console.error("Noti Error:", err); 
-        res.status(500).json({ success: false, message: "Server Error" }); 
-    }
-});
 app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
     try {
         const sql = `SELECT EP.ExchangePostID as PostID, EP.DesiredShiftDate as DesiredDate, EP.Message as Note, EP.CreatedAt as Created_At, S.ShiftName, NS.Nurse_Date FROM ExchangePost EP JOIN NurseSchedule NS ON EP.ScheduleID = NS.ScheduleID JOIN Shift S ON NS.Shift_id = S.Shift_id WHERE EP.UserID = ? AND EP.Status = 'Open' ORDER BY EP.CreatedAt DESC`;
@@ -1444,17 +1460,6 @@ app.post('/api/admin/add-user', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error: ' + err.message });
     }
 });
-app.get('/api/admin/check-submission-status', authenticateToken, async (req, res) => {
-    try {
-        // ดึงสถานะปัจจุบันจากตาราง SystemSettings
-        const [rows] = await dbPool.query("SELECT SettingValue FROM SystemSettings WHERE SettingKey = 'WindowStatus'");
-        const isOpen = rows.length > 0 && rows[0].SettingValue === 'Open';
-        res.json({ success: true, isOpen: isOpen });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: "Server Error" });
-    }
-});
 // =========================================================================
 // API: ระบบจัดเวรอัตโนมัติ (Full Intelligent Engine)
 // - กฎ 1: เมื่อวานดึก -> ห้ามวันนี้เช้า (Fatigue)
@@ -1716,6 +1721,140 @@ app.get('/api/get-my-constraints', authenticateToken, async (req, res) => {
 
     } catch (err) {
         console.error("Get Constraints Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+// ==========================================
+// 9. USER MANAGEMENT (จัดการรายชื่อพยาบาล)
+// ==========================================
+
+// API ดึงรายชื่อพยาบาลทั้งหมด (สำหรับหน้า Admin)
+app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.roleId !== 1) return res.status(403).json({ success: false, message: 'Access Denied' });
+
+        // เรียงลำดับ: Active ขึ้นก่อน, ตามด้วยชื่อ
+        const sql = `
+            SELECT UserID, FirstName, LastName, Email, RoleID, Status, ProfileImage, CreatedAt 
+            FROM User 
+            ORDER BY Status ASC, FirstName ASC
+        `;
+        const [users] = await dbPool.query(sql);
+        res.json({ success: true, users });
+    } catch (err) {
+        console.error("Fetch Users Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
+// API ปรับสถานะพยาบาล (Active / Inactive)
+app.post('/api/admin/update-user-status', authenticateToken, async (req, res) => {
+    const { targetUserId, newStatus } = req.body; // newStatus ส่งมาเป็น 'active' หรือ 'inactive'
+
+    try {
+        if (req.user.roleId !== 1) return res.status(403).json({ success: false, message: 'Access Denied' });
+        
+        // ป้องกันการแบนตัวเอง
+        if (targetUserId == req.user.userId) {
+            return res.status(400).json({ success: false, message: "ไม่สามารถเปลี่ยนสถานะตัวเองได้" });
+        }
+
+        await dbPool.query("UPDATE User SET Status = ? WHERE UserID = ?", [newStatus, targetUserId]);
+
+        res.json({ success: true, message: `ปรับสถานะเป็น ${newStatus} เรียบร้อยแล้ว` });
+    } catch (err) {
+        console.error("Update Status Error:", err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+// API สำหรับดึงสถิติรวมของทีมรายเดือน
+app.get('/api/admin/team-stats', authenticateToken, async (req, res) => {
+    const { month, year } = req.query; // รับค่าเช่น month=12, year=2025
+    
+    try {
+        // 1. ดึงสถิติรวมทั้งวอร์ดแยกตามกะ
+        const [wardStats] = await dbPool.query(`
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN Shift_id = 1 THEN 1 ELSE 0 END) as morning,
+                SUM(CASE WHEN Shift_id = 2 THEN 1 ELSE 0 END) as afternoon,
+                SUM(CASE WHEN Shift_id = 3 THEN 1 ELSE 0 END) as night
+            FROM NurseSchedule 
+            WHERE MONTH(Nurse_Date) = ? AND YEAR(Nurse_Date) = ?
+        `, [month, year]);
+
+        // 2. ดึงรายชื่อพยาบาลและสถิติรายบุคคลในเดือนนั้น
+        const [nurses] = await dbPool.query(`
+            SELECT 
+                U.UserID, U.FirstName, U.LastName, U.ProfileImage,
+                COUNT(NS.ScheduleID) as total,
+                SUM(CASE WHEN NS.Shift_id = 1 THEN 1 ELSE 0 END) as m,
+                SUM(CASE WHEN NS.Shift_id = 2 THEN 1 ELSE 0 END) as a,
+                SUM(CASE WHEN NS.Shift_id = 3 THEN 1 ELSE 0 END) as n
+            FROM User U
+            LEFT JOIN NurseSchedule NS ON U.UserID = NS.UserID 
+                AND MONTH(NS.Nurse_Date) = ? AND YEAR(NS.Nurse_Date) = ?
+            WHERE U.RoleID IN (1, 2) AND U.Status = 'active'
+            GROUP BY U.UserID
+            ORDER BY total DESC
+        `, [month, year]);
+
+        // 3. ดึงรายละเอียดวันทำงาน (Dates) สำหรับใช้ใน Modal
+        // (ส่งไปทั้งหมดแล้วไป Filter ฝั่ง Client หรือจะดึงแยกเมื่อกดก็ได้)
+        const [allDates] = await dbPool.query(`
+            SELECT NS.UserID, DATE_FORMAT(NS.Nurse_Date, '%d %b') as d, S.ShiftName as type
+            FROM NurseSchedule NS
+            JOIN Shift S ON NS.Shift_id = S.Shift_id
+            WHERE MONTH(NS.Nurse_Date) = ? AND YEAR(NS.Nurse_Date) = ?
+        `, [month, year]);
+
+        // ประกอบข้อมูลกลับไป
+        res.json({
+            success: true,
+            monthName: moment(`${year}-${month}-01`).format('MMMM'),
+            wardTotal: wardStats[0].total || 0,
+            totalM: wardStats[0].morning || 0,
+            totalA: wardStats[0].afternoon || 0,
+            totalN: wardStats[0].night || 0,
+            nurses: nurses.map(n => ({
+                ...n,
+                name: `${n.FirstName} ${n.LastName}`,
+                img: n.ProfileImage || `https://ui-avatars.com/api/?name=${n.FirstName}`,
+                status: n.n > 5 ? 'ดึกหนัก' : n.a > 10 ? 'บ่ายหนัก' : 'ปกติ',
+                dates: allDates.filter(d => d.UserID === n.UserID)
+            }))
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+app.post('/api/force-change-password', authenticateToken, async (req, res) => {
+    const { userId, newPassword } = req.body;
+
+    // Security Check: ตรวจสอบว่าคนเปลี่ยนคือเจ้าของบัญชีจริงๆ
+    if (req.user.userId != userId) {
+        return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร" });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // อัปเดตรหัสผ่านใหม่ + เปลี่ยน MustChangePassword เป็น 0 (ปลดล็อค)
+        await dbPool.query(
+            "UPDATE User SET PasswordHash = ?, MustChangePassword = 0 WHERE UserID = ?", 
+            [hashedPassword, userId]
+        );
+
+        res.json({ success: true, message: "เปลี่ยนรหัสผ่านสำเร็จ เข้าใช้งานระบบได้เลยครับ" });
+
+    } catch (err) {
+        console.error("Force Change Password Error:", err);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });

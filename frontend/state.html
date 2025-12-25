@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTONURSESHIFT - Statistics Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="./lib/flatpickr.css">
+    <script src="./lib/flatpickr.js"></script>
+    <script src="./lib/th.js"></script>
+    <link rel="stylesheet" href="./lib/fontawesome/css/all.min.css">
+    <link href="./style.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/th.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="components.js"></script> 
+    <style>
+        body { 
+            font-family: 'Kanit', sans-serif; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .menu-gradient-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .menu-gradient-2 { background: linear-gradient(135deg, #2af598 0%, #009efd 100%); }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
+    </style>
+</head>
+<body class="text-gray-800">
+<div class="flex flex-col min-h-screen">
+    <app-header class="sticky top-0 z-30"></app-header>
+
+    <main class="flex-1 max-w-screen-md mx-auto w-full px-5 py-8">
+
+        <div class="grid gap-6">
+            <a href="statistics.html" class="group relative overflow-hidden rounded-[2rem] shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div class="menu-gradient-1 p-8 text-white">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div>
+                            <div class="bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-md mb-4">
+                                <i class="fa-solid fa-user-doctor text-2xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold">สถิติส่วนบุคคล</h3>
+                            <p class="text-indigo-100 text-sm opacity-90">ตรวจสอบชั่วโมงบินและภาระงานของคุณ</p>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                    </div>
+                </div>
+                <div class="absolute -bottom-8 -right-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+            </a>
+
+            <a href="statistics.H.T.html" class="group relative overflow-hidden rounded-[2rem] shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div class="menu-gradient-2 p-8 text-white">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div>
+                            <div class="bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-md mb-4">
+                                <i class="fa-solid fa-users-gear text-2xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold">สถิติทีมและหน่วยงาน</h3>
+                            <p class="text-emerald-50 text-sm opacity-90">ภาพรวมการกระจายเวรและประสิทธิภาพทีม</p>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                    </div>
+                </div>
+                <div class="absolute -bottom-8 -right-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+            </a>
+        </div>
+
+        <div class="mt-8 glass-card rounded-3xl p-6 border-dashed border-2 border-indigo-200 flex items-center gap-4 text-indigo-800">
+            <div class="text-3xl text-indigo-400">
+                <i class="fa-solid fa-circle-info"></i>
+            </div>
+            <p class="text-sm leading-relaxed">
+                ข้อมูลสถิติจะอัปเดตแบบเรียลไทม์ตามการบันทึกเวรล่าสุดในระบบ <strong>Auto Nurse Shift</strong>
+            </p>
+        </div>
+    </main>
+    <app-navbar class="sticky top-0 z-30"></app-navbar>
+</div>
+
+<script>
+    document.getElementById('current-date').textContent = new Date().toLocaleDateString('th-TH', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+</script>
+
+</body>
+</html>

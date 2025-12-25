@@ -11,6 +11,7 @@
     
     <script src="lib/sweetalert2.js"></script>
     <script src="lib/moment.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
     <script src="components.js"></script>
 </head>
 <body class="bg-gray-50 font-sans flex flex-col h-screen">
@@ -100,16 +101,18 @@
                     <div id="missing-list" class="space-y-2"></div>
                 </div>
 
-                <div class="flex gap-4 pt-4">
+                <div class="flex flex-col md:flex-row gap-4 pt-4">
                     <a href="Headnurse_dashboard.html" class="flex-1 bg-white border border-gray-200 text-gray-600 py-3 rounded-xl text-center font-bold hover:bg-gray-50 transition">
                         กลับหน้าหลัก
                     </a>
+                    <button id="btn-export-excel" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-center font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-file-excel"></i> ดาวน์โหลด Excel
+                    </button>
                     <a href="schedule.html" class="flex-1 bg-violet-600 text-white py-3 rounded-xl text-center font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 transition">
                         ดูตารางเวรที่ได้
                     </a>
                 </div>
             </div>
-
         </div>
     </main>
 
@@ -117,105 +120,76 @@
 
     <script>
         const API_URL = (typeof API_BASE !== 'undefined') ? API_BASE : 'http://localhost:3000';
-        let existingScheduleFound = false; // ตัวแปรเก็บสถานะว่ามีเวรเดิมไหม
+        let existingScheduleFound = false;
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // 1. ตรวจสอบสิทธิ์
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             if (user.RoleID !== 1) {
                 window.location.href = 'dashboard.html';
                 return;
             }
 
-            // 2. แสดงเดือนเป้าหมาย
             if (typeof moment !== 'undefined') {
                 const nextMonth = moment().add(1, 'month');
                 document.getElementById('target-month-display').innerText = nextMonth.format('MMMM YYYY');
-                
-                // 3. ✅ ตรวจสอบว่าเดือนนี้เคยจัดเวรไปหรือยัง?
                 await checkExistingSchedule(nextMonth.month() + 1, nextMonth.year());
             }
 
             document.getElementById('btn-start-generate').addEventListener('click', handleGenerateClick);
+            document.getElementById('btn-export-excel').addEventListener('click', exportToExcel);
         });
 
-        // ฟังก์ชันเช็คว่ามีตารางเวรอยู่แล้วหรือไม่
         async function checkExistingSchedule(month, year) {
             try {
                 const token = localStorage.getItem('authToken');
-                // ใช้ API full-schedule เพื่อเช็คว่ามีข้อมูลไหม
                 const res = await fetch(`${API_URL}/api/full-schedule`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ month, year })
                 });
                 const data = await res.json();
-
                 if (data.success && data.shifts && data.shifts.length > 0) {
                     existingScheduleFound = true;
-                    
-                    // ปรับ UI ให้รู้ว่าเป็นการ "ทำใหม่"
                     document.getElementById('existing-warning').classList.remove('hidden');
                     document.getElementById('btn-text').innerText = "ประมวลผลใหม่ (ล้างข้อมูลเดิม)";
-                    document.getElementById('btn-icon').className = "fas fa-sync-alt text-xl text-white animate-spin-slow"; // เปลี่ยนไอคอน
-                    
-                    // เปลี่ยนสีปุ่มเป็นโทนส้ม/แดง เพื่อเตือน
+                    document.getElementById('btn-icon').className = "fas fa-sync-alt text-xl text-white animate-spin-slow";
                     const btn = document.getElementById('btn-start-generate');
                     btn.className = "group relative w-full md:w-2/3 mx-auto bg-amber-600 text-white p-4 rounded-2xl shadow-xl hover:bg-amber-700 transition-all duration-300 overflow-hidden";
                 }
-            } catch (err) {
-                console.error("Check schedule error:", err);
-            }
+            } catch (err) { console.error("Check error:", err); }
         }
 
         async function handleGenerateClick() {
-            // ถ้ามีข้อมูลอยู่แล้ว ให้ถามยืนยันก่อน
             if (existingScheduleFound) {
                 const result = await Swal.fire({
                     title: 'ยืนยันการจัดเวรใหม่?',
-                    text: "ระบบตรวจพบตารางเวรของเดือนนี้อยู่แล้ว การดำเนินการนี้จะลบตารางเดิมทิ้งทั้งหมดและสร้างใหม่",
+                    text: "ระบบจะลบตารางเดิมทิ้งทั้งหมดและสร้างใหม่",
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'ใช่, ล้างและสร้างใหม่',
-                    cancelButtonText: 'ยกเลิก'
+                    confirmButtonText: 'ใช่, ล้างและสร้างใหม่'
                 });
-
                 if (!result.isConfirmed) return;
             }
-
             startGeneration();
         }
 
         async function startGeneration() {
-            // UI Transition
             const btnArea = document.getElementById('action-area');
             const loadArea = document.getElementById('loading-area');
             const resultSec = document.getElementById('result-section');
             const stepText = document.getElementById('loading-step');
-            const warningBox = document.getElementById('existing-warning');
 
             btnArea.classList.add('hidden');
-            if(warningBox) warningBox.classList.add('hidden');
             resultSec.classList.add('hidden');
             loadArea.classList.remove('hidden');
 
-            // Simulate Steps
-            const steps = [
-                "กำลังโหลดข้อมูลพยาบาล...",
-                "วิเคราะห์ข้อจำกัด (Constraints)...",
-                "ตรวจสอบกฎความปลอดภัย (Fatigue Rules)...",
-                "เกลี่ยเวรให้เป็นธรรม...",
-                "กำลังบันทึกข้อมูลลงฐานข้อมูล..."
-            ];
-
-            for (let i = 0; i < steps.length; i++) {
-                stepText.innerText = steps[i];
+            const steps = ["วิเคราะห์ข้อมูล...", "ตรวจสอบกฎ...", "เกลี่ยเวร...", "บันทึกข้อมูล..."];
+            for (let step of steps) {
+                stepText.innerText = step;
                 await new Promise(r => setTimeout(r, 800));
             }
 
-            // Call Real API
             try {
                 const token = localStorage.getItem('authToken');
                 const res = await fetch(`${API_URL}/api/admin/generate-schedule`, {
@@ -223,57 +197,105 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
-
                 loadArea.classList.add('hidden');
                 resultSec.classList.remove('hidden');
 
                 if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'เสร็จสิ้น!',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-
-                    // Handle Incomplete Shifts
-                    const incomplete = data.incompleteShifts || [];
-                    const missingCard = document.getElementById('incomplete-card');
-                    const missingListCont = document.getElementById('missing-list-container');
-                    const missingList = document.getElementById('missing-list');
-
-                    if (incomplete.length > 0) {
-                        missingCard.classList.remove('hidden');
-                        document.getElementById('missing-count').innerText = incomplete.length;
-                        
-                        missingListCont.classList.remove('hidden');
-                        missingList.innerHTML = incomplete.map(item => `
-                            <div class="bg-white p-3 rounded-lg border-l-4 border-rose-400 shadow-sm flex justify-between items-center">
-                                <div>
-                                    <span class="font-bold text-gray-700">${moment(item.date).format('D MMM')}</span>
-                                    <span class="text-sm text-gray-500 ml-2">กะ${item.shift}</span>
-                                </div>
-                                <span class="text-xs bg-rose-100 text-rose-600 px-2 py-1 rounded-full font-bold">
-                                    ขาด ${item.wanted - item.got} คน
-                                </span>
-                            </div>
-                        `).join('');
-                    } else {
-                        missingCard.classList.add('hidden');
-                        missingListCont.classList.add('hidden');
+                    Swal.fire({ icon: 'success', title: 'จัดเวรเรียบร้อย!', timer: 2000 });
+                    if (data.incompleteShifts && data.incompleteShifts.length > 0) {
+                        renderIncomplete(data.incompleteShifts);
                     }
-
-                } else {
-                    throw new Error(data.message);
-                }
-
+                } else { throw new Error(data.message); }
             } catch (err) {
-                console.error(err);
-                loadArea.classList.add('hidden');
+                Swal.fire('ผิดพลาด', err.message, 'error');
                 btnArea.classList.remove('hidden');
-                Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+                loadArea.classList.add('hidden');
             }
         }
+
+        function renderIncomplete(incomplete) {
+            const card = document.getElementById('incomplete-card');
+            const listCont = document.getElementById('missing-list-container');
+            const list = document.getElementById('missing-list');
+            card.classList.remove('hidden');
+            listCont.classList.remove('hidden');
+            document.getElementById('missing-count').innerText = incomplete.length;
+            list.innerHTML = incomplete.map(item => `
+                <div class="bg-white p-3 rounded-lg border-l-4 border-rose-400 shadow-sm flex justify-between">
+                    <span>${moment(item.date).format('D MMM')} (กะ ${item.shift})</span>
+                    <span class="text-rose-600 font-bold">ขาด ${item.wanted - item.got} คน</span>
+                </div>
+            `).join('');
+        }
+
+        async function exportToExcel() {
+    try {
+        const token = localStorage.getItem('authToken');
+        // คำนวณเดือนเป้าหมายไว้ด้านบนสุด
+        const nextMonth = moment().add(1, 'month');
+        const m = nextMonth.month() + 1;
+        const y = nextMonth.year();
+        const daysInMonth = nextMonth.daysInMonth();
+        
+        Swal.fire({ 
+            title: 'กำลังสร้างไฟล์ Excel...', 
+            text: 'ระบบกำลังจัดเรียงข้อมูลให้ถูกต้อง',
+            allowOutsideClick: false, 
+            didOpen: () => { Swal.showLoading(); } 
+        });
+
+        const res = await fetch(`${API_URL}/api/full-schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ month: m, year: y })
+        });
+        const data = await res.json();
+
+        if (data.success && data.shifts && data.shifts.length > 0) {
+            // ดึงรายชื่อพยาบาล และใช้ trim() เพื่อป้องกันปัญหาช่องว่างในชื่อ
+            const nurses = [...new Set(data.shifts.map(s => `${s.FirstName} ${s.LastName}`.trim()))].sort();
+            
+            // กำหนด Header ล็อกคอลัมน์ A เป็นชื่อ-นามสกุล
+            const headerOrder = ['ชื่อ-นามสกุล'];
+            for (let d = 1; d <= daysInMonth; d++) {
+                headerOrder.push(`${d}`);
+            }
+
+            const calendarData = nurses.map(fullName => {
+                const row = { 'ชื่อ-นามสกุล': fullName };
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = nextMonth.date(d).format('YYYY-MM-DD');
+                    
+                    // ค้นหาเวร โดยตรวจสอบทั้งชื่อและวันที่
+                    const matches = data.shifts.filter(s => 
+                        `${s.FirstName} ${s.LastName}`.trim() === fullName && s.Nurse_Date === dateStr
+                    );
+
+                    row[`${d}`] = matches.length > 0 ? matches.map(m => m.ShiftName).join('/') : '-';
+                }
+                return row;
+            });
+
+            const ws = XLSX.utils.json_to_sheet(calendarData, { header: headerOrder });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "ตารางเวร");
+
+            // ปรับขนาดคอลัมน์ A (ชื่อ) ให้กว้าง 25 เพื่อความสวยงาม
+            ws['!cols'] = [{ wch: 25 }];
+
+            const fileName = `ตารางเวร_${nextMonth.format('MMMM_YYYY')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ดาวน์โหลดไฟล์เรียบร้อยแล้ว', timer: 1500 });
+        } else {
+            Swal.fire('ไม่พบข้อมูล', 'ฐานข้อมูลยังไม่มีตารางเวรที่จะแสดง', 'warning');
+        }
+    } catch (err) {
+        console.error("Export Error:", err);
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้างไฟล์ได้: ' + err.message, 'error');
+    }
+}
     </script>
 </body>
 </html>
