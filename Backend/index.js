@@ -1769,7 +1769,7 @@ app.post('/api/admin/update-user-status', authenticateToken, async (req, res) =>
 });
 // API สำหรับดึงสถิติรวมของทีมรายเดือน
 app.get('/api/admin/team-stats', authenticateToken, async (req, res) => {
-    const { month, year } = req.query; // รับค่าเช่น month=12, year=2025
+    const { month, year } = req.query; 
     
     try {
         // 1. ดึงสถิติรวมทั้งวอร์ดแยกตามกะ
@@ -1832,8 +1832,6 @@ app.get('/api/admin/team-stats', authenticateToken, async (req, res) => {
 });
 app.post('/api/force-change-password', authenticateToken, async (req, res) => {
     const { userId, newPassword } = req.body;
-
-    // Security Check: ตรวจสอบว่าคนเปลี่ยนคือเจ้าของบัญชีจริงๆ
     if (req.user.userId != userId) {
         return res.status(403).json({ success: false, message: "Unauthorized" });
     }
@@ -1844,8 +1842,6 @@ app.post('/api/force-change-password', authenticateToken, async (req, res) => {
 
     try {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        // อัปเดตรหัสผ่านใหม่ + เปลี่ยน MustChangePassword เป็น 0 (ปลดล็อค)
         await dbPool.query(
             "UPDATE User SET PasswordHash = ?, MustChangePassword = 0 WHERE UserID = ?", 
             [hashedPassword, userId]
