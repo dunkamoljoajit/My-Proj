@@ -187,7 +187,8 @@
         // ✅ ฟังก์ชันดึงสถานะการส่งข้อจำกัด (Progress + Personal Status)
         async function updateConstraintStatus() {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
+                
                 const res = await fetch(`${API_URL}/api/constraint-status`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -231,6 +232,7 @@
                 const user = JSON.parse(userStr);
                 if (user.RoleID !== 1) throw new Error("Unauthorized");
             } catch (e) {
+                // หากยังไม่ Login ให้เด้งออก แต่อย่าเพิ่ง clear token เผื่อจะ debug
                 localStorage.clear();
                 window.location.href = 'login.html';
             }
@@ -268,7 +270,7 @@
         }
 
         async function loadAllData() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const statusBarText = document.getElementById('status-bar-text');
 
             try {
@@ -311,8 +313,11 @@
 
                 const pending = await pendingRes.json();
                 if(pending.success) {
-                    document.getElementById('pending-swap-count').innerText = pending.swapCount;
-                    document.getElementById('pending-trade-count').innerText = pending.tradeCount;
+                    // เช็คก่อนว่ามี element นี้จริงไหม (กัน error)
+                    const swapCount = document.getElementById('pending-swap-count');
+                    const tradeCount = document.getElementById('pending-trade-count');
+                    if(swapCount) swapCount.innerText = pending.swapCount;
+                    if(tradeCount) tradeCount.innerText = pending.tradeCount;
                 }
 
                 checkGenerateEligibility();
@@ -363,7 +368,11 @@
 
         async function togglePeriod(status) {
             if(!confirm(`ยืนยันการ "${status==='Open'?'เปิด':'ปิด'}" ระบบ?\n\n${status==='Open' ? 'พยาบาลจะสามารถส่งเวรได้ และคุณจะแก้ไขค่าไม่ได้' : 'พยาบาลจะส่งเวรไม่ได้อีก และคุณสามารถสั่งจัดเวรได้'}`)) return;
-            const res = await fetch(`${API_URL}/api/admin/toggle-window`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('authToken')}`}, body:JSON.stringify({status}) });
+            const res = await fetch(`${API_URL}/api/admin/toggle-window`, { 
+                method:'POST', 
+                headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('token')}`}, 
+                body:JSON.stringify({status}) 
+            });
             if(res.ok) {
                 loadAllData();
                 updateConstraintStatus(); // อัปเดตสถานะด้วย
@@ -383,7 +392,7 @@
             const a = document.getElementById('quotaAfternoon').value;
             const n = document.getElementById('quotaNight').value;
             const d = document.getElementById('deadlineDate').value;
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
 
             try {
                 const saveRes = await fetch(`${API_URL}/api/admin/save-settings`, { 

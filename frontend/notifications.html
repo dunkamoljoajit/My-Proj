@@ -84,7 +84,7 @@
 
         async function markAllAsRead() {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const res = await fetch(`${API_BASE}/api/notifications/mark-all-read`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -106,7 +106,7 @@
             empty.classList.add('hidden');
 
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const res = await fetch(`${API_BASE}/api/notifications/all/${currentUser.UserID}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -222,7 +222,7 @@
             }
 
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

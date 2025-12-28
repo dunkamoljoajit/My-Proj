@@ -141,7 +141,7 @@
 
         async function checkExistingSchedule(month, year) {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const res = await fetch(`${API_URL}/api/full-schedule`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -191,7 +191,7 @@
             }
 
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const res = await fetch(`${API_URL}/api/admin/generate-schedule`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -227,11 +227,9 @@
                 </div>
             `).join('');
         }
-
         async function exportToExcel() {
     try {
-        const token = localStorage.getItem('authToken');
-        // คำนวณเดือนเป้าหมายไว้ด้านบนสุด
+        const token = localStorage.getItem('token');
         const nextMonth = moment().add(1, 'month');
         const m = nextMonth.month() + 1;
         const y = nextMonth.year();
@@ -239,7 +237,6 @@
         
         Swal.fire({ 
             title: 'กำลังสร้างไฟล์ Excel...', 
-            text: 'ระบบกำลังจัดเรียงข้อมูลให้ถูกต้อง',
             allowOutsideClick: false, 
             didOpen: () => { Swal.showLoading(); } 
         });
@@ -252,10 +249,8 @@
         const data = await res.json();
 
         if (data.success && data.shifts && data.shifts.length > 0) {
-            // ดึงรายชื่อพยาบาล และใช้ trim() เพื่อป้องกันปัญหาช่องว่างในชื่อ
             const nurses = [...new Set(data.shifts.map(s => `${s.FirstName} ${s.LastName}`.trim()))].sort();
             
-            // กำหนด Header ล็อกคอลัมน์ A เป็นชื่อ-นามสกุล
             const headerOrder = ['ชื่อ-นามสกุล'];
             for (let d = 1; d <= daysInMonth; d++) {
                 headerOrder.push(`${d}`);
@@ -267,7 +262,6 @@
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dateStr = nextMonth.date(d).format('YYYY-MM-DD');
                     
-                    // ค้นหาเวร โดยตรวจสอบทั้งชื่อและวันที่
                     const matches = data.shifts.filter(s => 
                         `${s.FirstName} ${s.LastName}`.trim() === fullName && s.Nurse_Date === dateStr
                     );
@@ -280,20 +274,23 @@
             const ws = XLSX.utils.json_to_sheet(calendarData, { header: headerOrder });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "ตารางเวร");
-
-            // ปรับขนาดคอลัมน์ A (ชื่อ) ให้กว้าง 25 เพื่อความสวยงาม
-            ws['!cols'] = [{ wch: 25 }];
+            const colWidths = [{ wch: 25 }]; // คอลัมน์ A กว้าง 25
+            for (let i = 1; i <= daysInMonth; i++) {
+                colWidths.push({ wch: 6 }); // 
+            }
+            ws['!cols'] = colWidths;
+            // ------------------------------------------------
 
             const fileName = `ตารางเวร_${nextMonth.format('MMMM_YYYY')}.xlsx`;
             XLSX.writeFile(wb, fileName);
 
-            Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ดาวน์โหลดไฟล์เรียบร้อยแล้ว', timer: 1500 });
+            Swal.fire({ icon: 'success', title: 'สำเร็จ!', timer: 1500 });
         } else {
             Swal.fire('ไม่พบข้อมูล', 'ฐานข้อมูลยังไม่มีตารางเวรที่จะแสดง', 'warning');
         }
     } catch (err) {
         console.error("Export Error:", err);
-        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้างไฟล์ได้: ' + err.message, 'error');
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
     }
 }
     </script>

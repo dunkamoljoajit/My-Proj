@@ -197,7 +197,7 @@
         async function checkSystemStatus() {
             try {
                 const res = await fetch(`${API_URL}/api/check-constraint-window`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
                 const data = await res.json();
                 
@@ -226,7 +226,7 @@
                 document.getElementById('loading-overlay').classList.remove('hidden'); 
                 
                 const res = await fetch(`${API_URL}/api/get-my-constraints?period=${period}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
                 const response = await res.json();
 
@@ -319,7 +319,7 @@
 
                 const res = await fetch(`${API_URL}/api/set-constraints`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify(payload)
                 });
 

@@ -266,7 +266,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const userStr = localStorage.getItem('user');
-            const token = localStorage.getItem('authToken'); // ✅ ตรวจสอบ Token
+            const token = localStorage.getItem('token'); 
 
             if(!userStr || !token) return window.location.href = 'login.html';
             
@@ -305,8 +305,7 @@
             const month = currentDate.getMonth() + 1;
             const year = currentDate.getFullYear();
             const grid = document.getElementById('calendarGrid');
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token
-
+            const token = localStorage.getItem('token'); 
             grid.innerHTML = '<div class="col-span-7 py-24 text-center"><i class="fas fa-spinner fa-spin text-indigo-500 text-3xl"></i></div>';
 
             try {
@@ -469,7 +468,7 @@
             const price = document.getElementById('sellPrice').value;
             const message = document.getElementById('sellMessage').value;
             const btn = document.getElementById('btn-confirm-sell');
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token
+            const token = localStorage.getItem('token'); 
             
             if(!price) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณาระบุราคาที่ต้องการขาย', 'warning');
 
@@ -535,7 +534,7 @@
         async function openPostModal(preSelectedId = null) {
             const modal = document.getElementById('postModal');
             const content = document.getElementById('postModalContent');
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token
+            const token = localStorage.getItem('token'); // ✅ ดึง Token
 
             document.getElementById('createPostForm').reset();
             
@@ -594,7 +593,7 @@
             const datePicker = document.getElementById('post-desired-date');
             const desiredDate = datePicker ? datePicker.value : "";
             const note = document.getElementById('post-note').value;
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token
+            const token = localStorage.getItem('token'); // ✅ ดึง Token
 
             if(!myShiftId) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณาเลือกเวรของคุณ', 'warning');
 

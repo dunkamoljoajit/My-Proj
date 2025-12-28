@@ -260,7 +260,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const userStr = localStorage.getItem('user');
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
 
             if(!userStr || !token) { window.location.href = 'login.html'; return; }
             currentUser = JSON.parse(userStr);
@@ -290,7 +290,7 @@
             const date = datePicker.value; 
             const shiftId = document.getElementById('searchShift').value;
             const container = document.getElementById('searchResults');
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token
+            const token = localStorage.getItem('token');
             
             if(!date) return Swal.fire({ icon: 'warning', title: 'กรุณาเลือกวันที่', confirmButtonColor: '#4f46e5' });
 
@@ -395,7 +395,7 @@
         
         async function fetchMyActivePost() {
             const container = document.getElementById('my-posts-list');
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
 
             container.innerHTML = `<div class="space-y-2 animate-pulse"><div class="h-16 w-full bg-slate-50 rounded-xl"></div><div class="h-16 w-full bg-slate-50 rounded-xl"></div></div>`;
             try {
@@ -435,7 +435,7 @@
         async function fetchIncomingRequests() {
             const container = document.getElementById('incoming-list');
             const badge = document.getElementById('incoming-badge');
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
 
             container.innerHTML = `<div class="black-bracket-card p-6 shadow-sm min-h-[120px] flex flex-col items-center justify-center opacity-50 animate-pulse"><div class="h-2 w-20 bg-slate-200 rounded mb-2"></div><div class="h-2 w-32 bg-slate-200 rounded"></div></div>`;
             try {
@@ -464,7 +464,7 @@
             document.getElementById('modal-target-schedule-id').value = sId;
             const modal = document.getElementById('requestModal');
             const content = document.getElementById('requestModalContent');
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
 
             modal.classList.remove('hidden'); 
             setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-90'); content.classList.add('scale-100'); }, 10);
@@ -491,7 +491,7 @@
             const myScheduleId = document.getElementById('my-offer-shift').value;
             const targetScheduleId = document.getElementById('modal-target-schedule-id').value;
             const reason = document.getElementById('modal-reason').value;
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem(''); 
 
             if(!myScheduleId) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณาเลือกเวรของคุณที่จะนำไปแลก', 'warning');
             const btn = document.getElementById('submit-request-btn');
@@ -514,7 +514,7 @@
         async function openPostModal() {
             const modal = document.getElementById('postModal');
             const content = document.getElementById('postModalContent');
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
 
             document.getElementById('createPostForm').reset();
             modal.classList.remove('hidden');
@@ -542,7 +542,7 @@
             const myShiftId = document.getElementById('post-my-shift').value;
             const desiredDate = document.getElementById('post-desired-date').value;
             const note = document.getElementById('post-note').value;
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
 
             if(!myShiftId) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณาเลือกเวรของคุณ', 'warning');
             const btn = document.getElementById('btn-create-post');
@@ -597,7 +597,7 @@
             const desiredDate = desiredDateInput ? desiredDateInput.value : "";
             const note = document.getElementById('edit-post-note').value;
             const btn = document.getElementById('btn-update-post');
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
 
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'; btn.disabled = true;
             try {
@@ -619,7 +619,7 @@
         async function deletePost(postId) {
             const confirm = await Swal.fire({ title: 'ลบประกาศ?', text: 'คนอื่นจะไม่เห็นโพสต์นี้อีก', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'ลบเลย', cancelButtonText: 'เก็บไว้', customClass: { popup: 'rounded-[2rem]' } });
             if (confirm.isConfirmed) {
-                const token = localStorage.getItem('authToken'); 
+                const token = localStorage.getItem('token'); 
                 try {
                     const res = await fetch(`${API_BASE}/api/posts/delete/${postId}`, { 
                         method: 'DELETE',
@@ -635,7 +635,7 @@
 
         async function respondSwap(id, act) {
             const isApprove = act === 'approve';
-            const token = localStorage.getItem('authToken'); 
+            const token = localStorage.getItem('token'); 
             const result = await Swal.fire({ title: isApprove ? 'ยืนยันการแลกเวร?' : 'ปฏิเสธคำขอ?', text: isApprove ? 'รายการจะถูกส่งต่อไปยังหัวหน้าพยาบาล' : 'รายการนี้จะถูกยกเลิกทันที', icon: 'question', showCancelButton: true, confirmButtonColor: isApprove ? '#15803d' : '#dc2626', confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', customClass: { popup: 'rounded-[2rem]' } });
             if(result.isConfirmed) {
                 try {

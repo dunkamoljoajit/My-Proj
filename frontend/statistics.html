@@ -137,7 +137,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const userStr = localStorage.getItem('user');
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             if (!userStr || !token) { window.location.href = 'login.html'; return; }
 
             const yearSelector = document.getElementById('yearSelector');
@@ -162,7 +162,7 @@
 
             try {
                 const user = JSON.parse(localStorage.getItem('user'));
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/api/my-stats`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

@@ -642,20 +642,30 @@ app.get('/api/notifications/unread-count/:userId', authenticateToken, async (req
         res.status(500).json({ success: false, message: "Server Error" }); 
     }
 });
-// ✅ แก้ไข API นับจำนวน Badge หัวหน้า
+// ✅ Correct Route for /api/admin/pending-counts
 app.get('/api/admin/pending-counts', authenticateToken, async (req, res) => {
+    // Debugging line
+    console.log("User Role in Request:", req.user.roleId);
+
+    // Loose equality (==) handles if roleId is string '1' or number 1
+    if (req.user.roleId != 1) {
+        return res.status(403).json({ success: false, message: 'Access Denied: Head Nurse Only' });
+    }
+
     try {
-        // นับเฉพาะรายการที่ "เพื่อนพยาบาลตกลงกันแล้ว" และ "รอหัวหน้าอนุมัติ"
         const [swap] = await dbPool.query("SELECT COUNT(*) as count FROM Shift_Exchange WHERE status = 'accepted'");
         const [trade] = await dbPool.query("SELECT COUNT(*) as count FROM ShiftTransaction WHERE Status = 'Pending_HeadNurse'");
 
         res.json({ 
             success: true, 
-            total: swap[0].count + trade[0].count, // ยอดรวมที่โชว์บนกระดิ่ง
-            swapCount: swap[0].count, 
-            tradeCount: trade[0].count 
+            total: (swap[0].count || 0) + (trade[0].count || 0), 
+            swapCount: swap[0].count || 0, 
+            tradeCount: trade[0].count || 0 
         });
-    } catch (err) { res.status(500).json({ success: false }); }
+    } catch (err) { 
+        console.error("Pending Counts Error:", err);
+        res.status(500).json({ success: false }); 
+    }
 });
 app.get('/api/admin/get-settings', authenticateToken, async (req, res) => { try { const [rows] = await dbPool.query('SELECT * FROM SystemSettings'); const settings = {}; rows.forEach(r => { if (r.SettingKey === 'QuotaMorning') settings.morning = r.SettingValue; if (r.SettingKey === 'QuotaAfternoon') settings.afternoon = r.SettingValue; if (r.SettingKey === 'QuotaNight') settings.night = r.SettingValue; if (r.SettingKey === 'DeadlineDate') settings.deadline = r.SettingValue; }); res.json({ success: true, settings }); } catch (err) { res.status(500).json({ success: false }); } });
 app.post('/api/admin/save-settings', authenticateToken, async (req, res) => {
@@ -1415,13 +1425,6 @@ app.post('/api/admin/add-user', authenticateToken, async (req, res) => {
         // 3. สร้างรหัสผ่านสุ่ม + เข้ารหัส
         const rawPassword = generateRandomPassword(8);
         const hashedPassword = await bcrypt.hash(rawPassword, 10);
-
-        // 🔥 LOG รหัสผ่านดูใน Terminal (เผื่อเมลไม่เข้า จะได้เอารหัสตรงนี้ไปเทส)
-        console.log(`---------------------------------------------`);
-        console.log(`➕ สร้าง User ใหม่: ${email}`);
-        console.log(`🔑 รหัสผ่านคือ: ${rawPassword}`);
-        console.log(`---------------------------------------------`);
-
         // 4. บันทึกลง Database
         const sql = `INSERT INTO User (Email, PasswordHash, FirstName, LastName, RoleID, Status, CreatedAt) 
                      VALUES (?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 7 HOUR))`;

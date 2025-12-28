@@ -180,7 +180,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const userStr = localStorage.getItem('user');
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
 
             if (!userStr || !token) {
                 alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
@@ -231,7 +231,7 @@
         }
 
         async function fetchMarketData(filterType = 'all') {
-            const token = localStorage.getItem('authToken'); // ✅ ดึง Token ทุกครั้งที่ใช้
+            const token = localStorage.getItem('token'); // ✅ ดึง Token ทุกครั้งที่ใช้
             if(currentTab === 'market'){
                 document.querySelectorAll('.filter-btn').forEach(btn => {
                     btn.className = 'filter-btn px-4 py-2 rounded-lg bg-white text-slate-600 border border-slate-200 text-xs font-medium hover:text-indigo-600 hover:border-indigo-300 whitespace-nowrap transition-all';
@@ -310,7 +310,7 @@
         }
 
         async function fetchMyActivePosts() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const container = document.getElementById('marketContainer');
             container.innerHTML = `<div class="col-span-full text-center py-12"><i class="fas fa-circle-notch fa-spin text-3xl text-indigo-300"></i></div>`;
 
@@ -368,7 +368,7 @@
         }
 
         async function fetchMyStatus() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const container = document.getElementById('myStatusContainer');
             try {
                 const response = await fetch(`${API_BASE}/api/market/my-requests/${currentUserId}`, {
@@ -422,7 +422,7 @@
         }
 
         async function checkIncomingRequests() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             try {
                 const res = await fetch(`${API_BASE}/api/market/incoming-requests/${currentUserId}`, {
                     method: 'GET',
@@ -481,7 +481,7 @@
         }
 
         function respondToRequest(transactionId, action) {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             Swal.fire({
                 title: action === 'approve' ? 'ยืนยันการขาย?' : 'ปฏิเสธคำขอ?',
                 text: action === 'approve' ? 'เมื่อยืนยันแล้ว คำขอจะถูกส่งต่อไปยังหัวหน้าพยาบาลเพื่ออนุมัติขั้นสุดท้าย' : 'รายการนี้จะถูกยกเลิกทันที',
@@ -537,7 +537,7 @@
         overlay.addEventListener('click', closePostModal);
 
         async function loadMySellableShifts() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const selector = document.getElementById('shiftSelector');
             selector.innerHTML = '<option value="" disabled selected>กำลังโหลด...</option>';
 
@@ -568,7 +568,7 @@
 
         function submitPost(e) {
             e.preventDefault();
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const formData = new FormData(e.target);
             const selectedScheduleId = formData.get('scheduleId');
             
@@ -604,7 +604,7 @@
         }
 
         function deletePost(postId) {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             Swal.fire({
                 title: 'ยืนยันการลบ?',
                 text: "ประกาศนี้จะหายไปจากตลาด",
@@ -628,7 +628,7 @@
         }
 
         async function editPost(postId, oldPrice, oldMsg) {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const { value: formValues } = await Swal.fire({
                 title: 'แก้ไขประกาศ',
                 html:
@@ -669,7 +669,7 @@
         }
 
         function requestTrade(shiftId, sellerName) {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             Swal.fire({
                 title: `ซื้อเวรจาก ${sellerName}?`,
                 text: "ระบบจะส่งคำขอไปยังเจ้าของเวรเพื่ออนุมัติ",

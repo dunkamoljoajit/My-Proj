@@ -192,7 +192,7 @@
                         const user = data.user;
 
                         // บันทึก Token
-                        if (data.token) localStorage.setItem('token', data.token); // เปลี่ยนชื่อ key เป็น token ให้สากล (หรือใช้ authToken ตามเดิมก็ได้)
+                        if (data.token) localStorage.setItem('token', data.token); 
                         
                         // บันทึก User Info
                         localStorage.setItem('user', JSON.stringify(user));

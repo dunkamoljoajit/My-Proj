@@ -188,7 +188,7 @@
             Swal.fire({ title: 'กำลังประมวลผล...', didOpen: () => Swal.showLoading() });
 
             try {
-                const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+                const token = localStorage.getItem('token') || localStorage.getItem('Token');
                 // เรียกใช้ API_BASE จาก components.js ได้เลย
                 const res = await fetch(`${API_BASE}/api/admin/import-users`, {
                     method: 'POST',
@@ -250,7 +250,7 @@
             Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
 
             try {
-                const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+                const token = localStorage.getItem('token') || localStorage.getItem('token');
                 // เรียกใช้ API_BASE จาก components.js
                 const res = await fetch(`${API_BASE}/api/admin/add-user`, {
                     method: 'POST',

@@ -20,7 +20,7 @@ function getProfileImageUrl(path) {
 
 async function logout() {
     const user = getUser(); // 1. ดึงข้อมูลผู้ใช้มาก่อนที่จะลบทิ้ง เพื่อเอา UserID
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('token');
 
     if (user && user.UserID) {
         try {
@@ -41,7 +41,6 @@ async function logout() {
 
     // 3. ลบข้อมูลใน LocalStorage (เหมือนเดิม)
     localStorage.removeItem('token');
-    localStorage.removeItem('authToken');
     localStorage.removeItem('user');
 
     // 4. Redirect ไปหน้า Login
@@ -171,7 +170,7 @@ class AppHeader extends HTMLElement {
 
     async loadNotificationsInDropdown(user, container) {
         try {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE}/api/notifications/all/${user.UserID}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -215,7 +214,7 @@ class AppHeader extends HTMLElement {
 
     async fetchBadgeCount(user) {
         try {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
             const isHead = user.RoleID === 1;
             const endpoint = isHead ? '/api/admin/pending-counts' : `/api/notifications/unread-count/${user.UserID}`;
             
@@ -522,7 +521,7 @@ function initNotificationSystem(userId, token) {
 // เรียกใช้งานอัตโนมัติเมื่อมีการ Login อยู่ (Self-Invoking)
 (function() {
     const user = getUser();
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('token');
     if (user && token) {
         initNotificationSystem(user.UserID, token);
     }
